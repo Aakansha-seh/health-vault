@@ -128,48 +128,25 @@ export function AuditLogView({ log }) {
         ) : (
           <>
             {/* Header */}
-            <div
-              style={{
-                display:             'grid',
-                gridTemplateColumns: '160px 160px 1fr',
-                padding:             '10px 16px',
-                borderBottom:        `1px solid ${C.border}`,
-                fontSize:            12,
-                fontWeight:          600,
-                color:               C.muted,
-                textTransform:       'uppercase',
-                letterSpacing:       0.4,
-              }}
-            >
+            <div className="audit-header" style={{ display: 'grid', padding: '10px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>
               <span>Timestamp</span>
               <span>Action</span>
-              <span>Detail</span>
+              <span className="audit-col-detail">Detail</span>
             </div>
 
             {paginated.map((entry, i) => (
               <div
                 key={i}
-                style={{
-                  display:             'grid',
-                  gridTemplateColumns: '160px 160px 1fr',
-                  padding:             '10px 16px',
-                  borderBottom:        `1px solid ${C.border}`,
-                  alignItems:          'start',
-                  fontSize:            13,
-                }}
+                className="audit-row"
+                style={{ display: 'grid', padding: '10px 16px', borderBottom: `1px solid ${C.border}`, alignItems: 'start', fontSize: 13 }}
               >
-                <span style={{ color: C.muted, whiteSpace: 'nowrap' }}>
+                <span style={{ color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {formatDateTime(entry.timestamp)}
                 </span>
-                <span
-                  style={{
-                    fontWeight: 600,
-                    color:      ACTION_COLOR[entry.action] ?? C.text,
-                  }}
-                >
+                <span style={{ fontWeight: 600, color: ACTION_COLOR[entry.action] ?? C.text }}>
                   {ACTION_LABELS[entry.action] ?? entry.action}
                 </span>
-                <span style={{ color: C.text, lineHeight: 1.5 }}>
+                <span className="audit-col-detail" style={{ color: C.text, lineHeight: 1.5 }}>
                   {entry.detail ?? '—'}
                 </span>
               </div>

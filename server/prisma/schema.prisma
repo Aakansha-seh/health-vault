@@ -1,0 +1,140 @@
+// HealthVault Prisma Schema
+// PostgreSQL + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Gender {
+  Male
+  Female
+  Other
+}
+
+enum AppointmentStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  LOCK_SESSION
+  VIEW_PATIENT
+  ADD_PATIENT
+  UPDATE_PATIENT
+  ADD_VISIT
+  EDIT_VISIT
+  ADD_APPOINTMENT
+  UPDATE_APPOINTMENT
+  COMPLETE_APPOINTMENT
+  CANCEL_APPOINTMENT
+  GCAL_SYNC
+  PRINT_PRESCRIPTION
+  EDIT_PROFILE
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Clinic {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  phone     String
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  doctors      Doctor[]
+  patients     Patient[]
+  appointments Appointment[]
+  auditLogs    AuditLog[]
+}
+
+model Doctor {
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  password       String
+  specialisation String
+  contact        String?
+  clinicHours    String?
+  yearsPractice  Int?
+  clinicId       String
+  createdAt      DateTime @default(now())
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  visits       Visit[]
+  appointments Appointment[]
+  auditLogs    AuditLog[]
+}
+
+model Patient {
+  id          String   @id @default(cuid())
+  name        String
+  age         Int
+  gender      Gender
+  isReturning Boolean  @default(false)
+  clinicId    String
+  createdAt   DateTime @default(now())
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  visits       Visit[]
+  appointments Appointment[]
+}
+
+model Visit {
+  id                      String   @id @default(cuid())
+  patientId               String
+  doctorId                String?
+  date                    DateTime
+  reason                  String
+  previousHistory         String?
+  symptoms                String?
+  testsDone               String?
+  prescription            String?
+  progressSinceLastVisit  String?
+  testReports             Json?    // Array of { name, url, type }
+  createdAt               DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor? @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+}
+
+model Appointment {
+  id         String            @id @default(cuid())
+  patientId  String
+  doctorId   String
+  clinicId   String
+  date       String            // YYYY-MM-DD
+  time       String            // HH:MM
+  reason     String
+  notes      String?
+  status     AppointmentStatus @default(scheduled)
+  gcalSynced Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  doctor  Doctor  @relation(fields: [doctorId], references: [id])
+  clinic  Clinic  @relation(fields: [clinicId], references: [id])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  timestamp  DateTime    @default(now())
+  doctorId   String
+  doctorName String
+  action     AuditAction
+  details    String?
+  clinicId   String
+
+  doctor Doctor @relation(fields: [doctorId], references: [id])
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+}

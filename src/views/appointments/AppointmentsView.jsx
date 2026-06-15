@@ -52,9 +52,10 @@ export function AppointmentsView({ appointments, patients, doctor, clinic, onAdd
     }
   }, [appointments, filterTab]);
 
-  const todayCount = appointments.filter(
-    (a) => isToday(a.date) && a.status === 'scheduled'
-  ).length;
+  const todayCount = appointments.filter((a) => {
+    if (!isToday(a.date) || a.status !== 'scheduled') return false;
+    return new Date(`${a.date}T${a.time}`) >= new Date();
+  }).length;
 
   if (showForm) {
     return (
@@ -150,24 +151,12 @@ export function AppointmentsView({ appointments, patients, doctor, clinic, onAdd
         ) : (
           <>
             {/* Column headers */}
-            <div
-              style={{
-                display:             'grid',
-                gridTemplateColumns: '1fr 90px 80px 110px 220px',
-                padding:             '10px 16px',
-                borderBottom:        `1px solid ${C.border}`,
-                fontSize:            12,
-                fontWeight:          600,
-                color:               C.muted,
-                textTransform:       'uppercase',
-                letterSpacing:       0.4,
-              }}
-            >
+            <div className="appt-header" style={{ display: 'grid', padding: '10px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>
               <span>Patient</span>
-              <span>Date</span>
-              <span>Time</span>
+              <span className="appt-col-date">Date</span>
+              <span className="appt-col-time">Time</span>
               <span>Status</span>
-              <span>Actions</span>
+              <span className="appt-col-doctor">Actions</span>
             </div>
 
             {filtered.map((appt) => (

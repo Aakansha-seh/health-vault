@@ -1,20 +1,27 @@
-import { useReducer, useCallback, useMemo, useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
-// ── Core state ──
-import { reducer, initialState, ACTIONS } from './store/reducer';
+// ── API client ──
+import {
+  getMe, getToken, clearToken, setToken,
+  getPatients, addPatient as apiAddPatient, updatePatient as apiUpdatePatient,
+  addVisit as apiAddVisit, updateVisit as apiUpdateVisit,
+  getAppointments, addAppointment as apiAddAppointment, updateAppointment as apiUpdateAppointment,
+  getAuditLog, logAudit as apiLogAudit,
+  getClinics, updateDoctor as apiUpdateDoctor,
+} from './services/api';
 
 // ── Layout ──
 import { GlobalStyle, Sidebar, BottomNav } from './components/layout';
 
 // ── Screens ──
-import { SplashScreen }       from './views/SplashScreen';
-import { LoginScreen }        from './views/auth/LoginScreen';
-import { SignUpScreen }       from './views/auth/SignUpScreen';
-import { PatientsView }       from './views/patients/PatientsView';
-import { AppointmentsView }   from './views/appointments/AppointmentsView';
-import { Dashboard }          from './views/dashboard/Dashboard';
-import { AuditLogView }       from './views/audit/AuditLogView';
-import { DoctorProfile }      from './views/profile/DoctorProfile';
+import { SplashScreen }     from './views/SplashScreen';
+import { LoginScreen }      from './views/auth/LoginScreen';
+import { SignUpScreen }     from './views/auth/SignUpScreen';
+import { PatientsView }     from './views/patients/PatientsView';
+import { AppointmentsView } from './views/appointments/AppointmentsView';
+import { Dashboard }        from './views/dashboard/Dashboard';
+import { AuditLogView }     from './views/audit/AuditLogView';
+import { DoctorProfile }    from './views/profile/DoctorProfile';
 
 // ── Design tokens ──
 import { C } from './constants/theme';
@@ -22,117 +29,157 @@ import { C } from './constants/theme';
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [state,    dispatch] = useReducer(reducer, initialState);
-  const [splashed,    setSplashed]    = useState(false);
-  const [view,        setView]        = useState('patients');
-  const [authScreen,  setAuthScreen]  = useState('login'); // 'login' | 'signup'
+  const [splashed,   setSplashed]   = useState(false);
+  const [authScreen, setAuthScreen] = useState('login');
+  const [view,       setView]       = useState('patients');
 
-  /* ── Derived from state ── */
-  const doctor = useMemo(
-    () => state.doctors.find((d) => d.id === state.currentDoctorId) ?? null,
-    [state.doctors, state.currentDoctorId]
-  );
+  // Auth state
+  const [doctor,      setDoctor]      = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  const clinic = useMemo(
-    () => doctor ? state.clinics.find((c) => c.id === doctor.clinicId) ?? null : null,
-    [state.clinics, doctor]
-  );
+  // Data state (all scoped to current doctor's clinic by the backend)
+  const [clinics,      setClinics]      = useState([]);
+  const [patients,     setPatients]     = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [auditLog,     setAuditLog]     = useState([]);
 
-  const clinicPatients = useMemo(
-    () => state.patients.filter((p) => p.clinicId === clinic?.id),
-    [state.patients, clinic]
-  );
+  /* ── Derived ── */
+  const clinic = doctor?.clinic ?? null;
 
-  const clinicAppointments = useMemo(
-    () => state.appointments.filter((a) => a.clinicId === clinic?.id),
-    [state.appointments, clinic]
-  );
+  /* ── Load all clinic data after login ── */
+  const loadData = useCallback(async () => {
+    try {
+      const [pats, appts, audit, cls] = await Promise.all([
+        getPatients(),
+        getAppointments(),
+        getAuditLog({ limit: 500 }),
+        getClinics(),
+      ]);
+      setPatients(pats);
+      setAppointments(appts);
+      setAuditLog(audit);
+      setClinics(cls);
+    } catch (err) {
+      console.error('Failed to load clinic data:', err);
+    }
+  }, []);
 
-  /* ── Audit helper ── */
-  const logAudit = useCallback((action, detail) => {
-    dispatch({
-      type:  ACTIONS.AUDIT,
-      entry: {
-        action,
-        detail,
-        timestamp: new Date().toISOString(),
-        doctorId:  state.currentDoctorId,
-      },
-    });
-  }, [state.currentDoctorId]);
+  /* ── Restore session from localStorage on mount ── */
+  useEffect(() => {
+    const token = getToken();
+    if (!token) { setAuthLoading(false); return; }
+    getMe()
+      .then((doc) => { setDoctor(doc); return loadData(); })
+      .catch(() => clearToken())
+      .finally(() => setAuthLoading(false));
+  }, [loadData]);
 
-  /* ── Auth ── */
-  const handleLogin = useCallback((doctorId) => {
-    dispatch({ type: ACTIONS.LOGIN, doctorId });
-    const d = state.doctors.find((doc) => doc.id === doctorId);
-    logAudit(ACTIONS.LOGIN, `${d?.name} signed in`);
+  /* ── Silent audit helper (never blocks UI) ── */
+  const logAudit = useCallback((action, details) => {
+    apiLogAudit(action, details).catch(() => {});
+    // Optimistically prepend to local audit log
+    setAuditLog((prev) => [{
+      id:         crypto.randomUUID(),
+      timestamp:  new Date().toISOString(),
+      doctorId:   doctor?.id,
+      doctorName: doctor?.name ?? '',
+      clinicId:   doctor?.clinicId,
+      action,
+      details,
+    }, ...prev].slice(0, 500));
+  }, [doctor]);
+
+  /* ── Auth handlers ── */
+  const handleLogin = useCallback(async ({ doctor: doc }) => {
+    setDoctor(doc);
+    await loadData();
     setView('patients');
-  }, [state.doctors, logAudit]);
+  }, [loadData]);
+
+  const handleRegister = useCallback(async ({ doctor: doc }) => {
+    setDoctor(doc);
+    await loadData();
+    setAuthScreen('login');
+    setView('patients');
+  }, [loadData]);
 
   const handleLogout = useCallback(() => {
-    logAudit(ACTIONS.LOGOUT, `${doctor?.name} signed out`);
-    dispatch({ type: ACTIONS.LOGOUT });
+    logAudit('LOGOUT', `${doctor?.name} signed out`);
+    clearToken();
+    setDoctor(null);
+    setPatients([]);
+    setAppointments([]);
+    setAuditLog([]);
+    setClinics([]);
     setAuthScreen('login');
     setView('patients');
   }, [doctor, logAudit]);
 
-  const handleRegister = useCallback((newDoctor) => {
-    dispatch({ type: ACTIONS.REGISTER_DOCTOR, payload: newDoctor });
-    // Log the registration, then auto-login as the new doctor.
-    dispatch({
-      type:  ACTIONS.AUDIT,
-      entry: {
-        action:    ACTIONS.REGISTER_DOCTOR,
-        detail:    `${newDoctor.name} created an account`,
-        timestamp: new Date().toISOString(),
-        doctorId:  newDoctor.id,
-      },
-    });
-    dispatch({ type: ACTIONS.LOGIN, doctorId: newDoctor.id });
-    setAuthScreen('login');
-    setView('patients');
-  }, []);
-
-  /* ── Patient actions ── */
-  const handleAddPatient = useCallback((patient) => {
-    dispatch({ type: ACTIONS.ADD_PATIENT, payload: patient });
-    logAudit(ACTIONS.ADD_PATIENT, `Added patient: ${patient.name}`);
+  /* ── Patient handlers ── */
+  const handleAddPatient = useCallback(async (patientData) => {
+    const patient = await apiAddPatient(patientData);
+    setPatients((prev) => [{ ...patient, visits: [] }, ...prev]);
+    logAudit('ADD_PATIENT', `Added patient: ${patient.name}`);
+    return patient;
   }, [logAudit]);
 
-  const handleUpdatePatient = useCallback((patient) => {
-    dispatch({ type: ACTIONS.UPDATE_PATIENT, payload: patient });
-    logAudit(ACTIONS.UPDATE_PATIENT, `Updated patient: ${patient.name}`);
+  const handleUpdatePatient = useCallback(async (patientData) => {
+    const updated = await apiUpdatePatient(patientData.id, patientData);
+    setPatients((prev) => prev.map((p) => p.id === updated.id ? { ...p, ...updated } : p));
+    logAudit('UPDATE_PATIENT', `Updated patient: ${updated.name}`);
+    return updated;
   }, [logAudit]);
 
-  const handleAddVisit = useCallback((patientId, visit) => {
-    dispatch({ type: ACTIONS.ADD_VISIT, patientId, visit });
-    const p = state.patients.find((pat) => pat.id === patientId);
-    logAudit(ACTIONS.ADD_VISIT, `Visit recorded for ${p?.name ?? patientId}: ${visit.diagnosis}`);
-  }, [state.patients, logAudit]);
+  const handleAddVisit = useCallback(async (patientId, visitData) => {
+    const visit = await apiAddVisit(patientId, visitData);
+    setPatients((prev) => prev.map((p) =>
+      p.id === patientId
+        ? { ...p, isReturning: true, visits: [visit, ...(p.visits ?? [])] }
+        : p
+    ));
+    const p = patients.find((pt) => pt.id === patientId);
+    logAudit('ADD_VISIT', `Visit recorded for ${p?.name ?? patientId}`);
+    return visit;
+  }, [patients, logAudit]);
 
-  /* ── Appointment actions ── */
-  const handleAddAppointment = useCallback((appt) => {
-    dispatch({ type: ACTIONS.ADD_APPOINTMENT, payload: appt });
-    const p = state.patients.find((pat) => pat.id === appt.patientId);
-    logAudit(ACTIONS.ADD_APPOINTMENT, `Appointment scheduled for ${p?.name ?? appt.patientId} on ${appt.date}`);
-  }, [state.patients, logAudit]);
-
-  const handleUpdateAppointment = useCallback((apptId, status) => {
-    const appt = state.appointments.find((a) => a.id === apptId);
-    if (!appt) return;
-    const updated = { ...appt, status };
-    dispatch({ type: ACTIONS.UPDATE_APPOINTMENT, payload: updated });
-    const p = state.patients.find((pat) => pat.id === appt.patientId);
-    logAudit(ACTIONS.UPDATE_APPOINTMENT, `Appointment for ${p?.name ?? appt.patientId} marked ${status}`);
-  }, [state.appointments, state.patients, logAudit]);
-
-  /* ── Profile action ── */
-  const handleUpdateDoctor = useCallback((updatedDoctor) => {
-    dispatch({ type: ACTIONS.UPDATE_DOCTOR, doctorId: updatedDoctor.id, payload: updatedDoctor });
-    logAudit(ACTIONS.UPDATE_DOCTOR, `${updatedDoctor.name} updated their profile`);
+  const handleUpdateVisit = useCallback(async (patientId, visitId, visitData) => {
+    const visit = await apiUpdateVisit(patientId, visitId, visitData);
+    setPatients((prev) => prev.map((p) =>
+      p.id === patientId
+        ? { ...p, visits: (p.visits ?? []).map((v) => v.id === visitId ? visit : v) }
+        : p
+    ));
+    logAudit('EDIT_VISIT', `Edited visit for patient ${patientId}`);
+    return visit;
   }, [logAudit]);
 
-  /* ── Render phases ── */
+  /* ── Appointment handlers ── */
+  const handleAddAppointment = useCallback(async (apptData) => {
+    const appt = await apiAddAppointment(apptData);
+    setAppointments((prev) => [...prev, appt]);
+    const p = patients.find((pt) => pt.id === appt.patientId);
+    logAudit('ADD_APPOINTMENT', `Appointment scheduled for ${p?.name ?? appt.patientId} on ${appt.date}`);
+    return appt;
+  }, [patients, logAudit]);
+
+  const handleUpdateAppointment = useCallback(async (apptId, payload) => {
+    const updated = await apiUpdateAppointment(apptId, payload);
+    setAppointments((prev) => prev.map((a) => a.id === apptId ? updated : a));
+    if (payload.status === 'completed') logAudit('COMPLETE_APPOINTMENT', `Appointment ${apptId} completed`);
+    else if (payload.status === 'cancelled') logAudit('CANCEL_APPOINTMENT', `Appointment ${apptId} cancelled`);
+    else logAudit('UPDATE_APPOINTMENT', `Appointment ${apptId} updated`);
+    return updated;
+  }, [logAudit]);
+
+  /* ── Doctor profile handler ── */
+  const handleUpdateDoctor = useCallback(async (updatedData) => {
+    const updated = await apiUpdateDoctor(doctor.id, updatedData);
+    setDoctor((prev) => ({ ...prev, ...updated }));
+    logAudit('EDIT_PROFILE', `${updated.name} updated their profile`);
+    return updated;
+  }, [doctor, logAudit]);
+
+  /* ── Render: splash ── */
   if (!splashed) {
     return (
       <>
@@ -142,34 +189,47 @@ export default function App() {
     );
   }
 
+  /* ── Render: restoring session ── */
+  if (authLoading) {
+    return (
+      <>
+        <GlobalStyle />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
+          <p style={{ color: C.muted, fontSize: 14 }}>Loading…</p>
+        </div>
+      </>
+    );
+  }
+
+  /* ── Render: auth screens ── */
   if (!doctor) {
     return (
       <>
         <GlobalStyle />
         {authScreen === 'signup' ? (
           <SignUpScreen
-            clinics={state.clinics}
-            doctors={state.doctors}
+            clinics={clinics.length ? clinics : []}
             onRegister={handleRegister}
             onBack={() => setAuthScreen('login')}
           />
         ) : (
           <LoginScreen
-            doctors={state.doctors}
-            clinics={state.clinics}
             onLogin={handleLogin}
-            onSignUp={() => setAuthScreen('signup')}
+            onSignUp={() => {
+              // Pre-load clinics for the signup form
+              if (!clinics.length) getClinics().then(setClinics).catch(() => {});
+              setAuthScreen('signup');
+            }}
           />
         )}
       </>
     );
   }
 
-  /* ── Main app shell ── */
+  /* ── Render: main app shell ── */
   return (
     <>
       <GlobalStyle />
-
       <div
         style={{
           display:    'flex',
@@ -178,42 +238,36 @@ export default function App() {
           fontFamily: 'Inter, sans-serif',
         }}
       >
-        {/* Desktop sidebar */}
-        <Sidebar
-          view={view}
-          setView={setView}
-          doctor={doctor}
-          onLogout={handleLogout}
-        />
+        <Sidebar view={view} setView={setView} doctor={doctor} onLogout={handleLogout} />
 
-        {/* Content area */}
         <main
           style={{
-            flex:       1,
-            marginLeft: 220,           /* sidebar width */
-            padding:    '28px 32px',
-            paddingBottom: 80,         /* clear mobile bottom nav */
-            maxWidth:   '100%',
-            overflowX:  'hidden',
+            flex:          1,
+            marginLeft:    220,
+            padding:       '28px 32px',
+            paddingBottom: 80,
+            maxWidth:      '100%',
+            overflowX:     'hidden',
           }}
           className="main-content"
         >
           {view === 'patients' && (
             <PatientsView
               key={doctor.id}
-              patients={clinicPatients}
+              patients={patients}
               doctor={doctor}
               clinic={clinic}
               onAddPatient={handleAddPatient}
               onUpdatePatient={handleUpdatePatient}
               onAddVisit={handleAddVisit}
+              onUpdateVisit={handleUpdateVisit}
             />
           )}
 
           {view === 'appointments' && (
             <AppointmentsView
-              appointments={clinicAppointments}
-              patients={clinicPatients}
+              appointments={appointments}
+              patients={patients}
               doctor={doctor}
               clinic={clinic}
               onAdd={handleAddAppointment}
@@ -223,13 +277,13 @@ export default function App() {
 
           {view === 'dashboard' && (
             <Dashboard
-              patients={clinicPatients}
-              appointments={clinicAppointments}
+              patients={patients}
+              appointments={appointments}
             />
           )}
 
           {view === 'audit' && (
-            <AuditLogView log={state.auditLog} />
+            <AuditLogView log={auditLog} />
           )}
 
           {view === 'profile' && (
@@ -241,7 +295,6 @@ export default function App() {
           )}
         </main>
 
-        {/* Mobile bottom tab bar */}
         <BottomNav view={view} setView={setView} />
       </div>
     </>

@@ -134,81 +134,61 @@ export function Dashboard({ patients, appointments }) {
         <StatCard label="Completed appts"  value={completedAppts} sub="all time"    color={C.success}         />
       </div>
 
-      {/* ── Activity chart ── */}
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ padding: '18px 20px 8px' }}>
-          <p style={{ fontSize: 14, fontWeight: 600, color: C.primary, marginBottom: 16 }}>
-            Activity — last 6 months
-          </p>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={monthlyData} barSize={18}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 12, fill: C.muted }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 12, fill: C.muted }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend
-                wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
-                iconSize={10}
-                iconType="circle"
-              />
-              <Bar dataKey="Visits"       fill={C.primary}   radius={[4,4,0,0]} />
-              <Bar dataKey="Appointments" fill={C.secondary} radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
-
-      {/* ── Top diagnoses ── */}
-      {diagnosisData.length > 0 && (
+      {/* ── Charts row ── */}
+      <div className="dashboard-charts grid-safe" style={{ display: 'grid', gap: 16 }}>
+        {/* Activity chart */}
         <Card>
-          <div style={{ padding: '18px 20px' }}>
+          <div style={{ padding: '18px 20px 8px' }}>
             <p style={{ fontSize: 14, fontWeight: 600, color: C.primary, marginBottom: 16 }}>
-              Most frequent diagnoses
+              Activity — last 6 months
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {diagnosisData.map(({ name, count }, i) => {
-                const pct = Math.round((count / diagnosisData[0].count) * 100);
-                return (
-                  <div key={name}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, color: C.text }}>{name}</span>
-                      <span style={{ fontSize: 12, color: C.muted }}>{count} case{count !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div
-                      style={{
-                        height:       6,
-                        background:   C.border,
-                        borderRadius: 3,
-                        overflow:     'hidden',
-                      }}
-                    >
-                      <div
-                        style={{
-                          height:       '100%',
-                          width:        `${pct}%`,
-                          background:   i === 0 ? C.primary : C.secondary,
-                          borderRadius: 3,
-                          transition:   'width .4s ease',
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={monthlyData} barSize={18}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 12, fill: C.muted }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: C.muted }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} iconSize={10} iconType="circle" />
+                <Bar dataKey="Visits"       fill={C.primary}   radius={[4,4,0,0]} />
+                <Bar dataKey="Appointments" fill={C.secondary} radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </Card>
-      )}
+
+        {/* Top diagnoses */}
+        {diagnosisData.length > 0 ? (
+          <Card>
+            <div style={{ padding: '18px 20px' }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: C.primary, marginBottom: 16 }}>
+                Most frequent diagnoses
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {diagnosisData.map(({ name, count }, i) => {
+                  const pct = Math.round((count / diagnosisData[0].count) * 100);
+                  return (
+                    <div key={name}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, color: C.text }}>{name}</span>
+                        <span style={{ fontSize: 12, color: C.muted }}>{count} case{count !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div style={{ height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: i === 0 ? C.primary : C.secondary, borderRadius: 3, transition: 'width .4s ease' }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <Card>
+            <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 120 }}>
+              <p style={{ color: C.muted, fontSize: 14 }}>No diagnoses recorded yet</p>
+            </div>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

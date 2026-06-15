@@ -1,10 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { C } from '../../constants/theme';
-import { ICONS } from '../../constants/icons';
 import { Button } from '../../components/ui/Button';
 import { Input }  from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
-import { uid }    from '../../utils/helpers';
+import { signup, setToken } from '../../services/api';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SPEC_OPTIONS = [
@@ -14,226 +13,72 @@ const SPEC_OPTIONS = [
   'Oncologist', 'Pulmonologist', 'Endocrinologist', 'Gastroenterologist',
 ].map((v) => ({ value: v, label: v }));
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
-function StepDots({ current, total }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 28 }}>
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          style={{
-            width:        i === current ? 20 : 8,
-            height:       8,
-            borderRadius: 4,
-            background:   i === current ? C.primary : i < current ? C.secondary : C.border,
-            transition:   'all .25s ease',
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ─── OTP Input — six individual boxes that auto-advance ──────────────────────
-function OtpInput({ value, onChange, disabled }) {
-  const refs = Array.from({ length: 6 }, () => useRef(null));
-  const digits = value.split('').concat(Array(6).fill('')).slice(0, 6);
-
-  const handleKey = (i, e) => {
-    if (e.key === 'Backspace') {
-      const next = digits.map((d, idx) => idx === i ? '' : d).join('').padEnd(6, '').slice(0, 6).trimEnd();
-      onChange(digits.map((d, idx) => (idx === i ? '' : d)).join(''));
-      if (i > 0) refs[i - 1].current?.focus();
-      return;
-    }
-    if (e.key === 'ArrowLeft'  && i > 0) { refs[i - 1].current?.focus(); return; }
-    if (e.key === 'ArrowRight' && i < 5) { refs[i + 1].current?.focus(); return; }
-  };
-
-  const handleInput = (i, e) => {
-    const char = e.target.value.replace(/\D/g, '').slice(-1);
-    if (!char) return;
-    const next = [...digits];
-    next[i] = char;
-    onChange(next.join(''));
-    if (i < 5) refs[i + 1].current?.focus();
-  };
-
-  const handlePaste = (e) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    onChange(pasted.padEnd(6, '').slice(0, 6).trimEnd().slice(0, pasted.length));
-    if (pasted.length > 0) refs[Math.min(pasted.length - 1, 5)].current?.focus();
-  };
-
-  return (
-    <div style={{ display: 'flex', gap: 10, justifyContent: 'center', margin: '8px 0' }}>
-      {digits.map((d, i) => (
-        <input
-          key={i}
-          ref={refs[i]}
-          type="text"
-          inputMode="numeric"
-          maxLength={1}
-          value={d}
-          disabled={disabled}
-          onChange={(e) => handleInput(i, e)}
-          onKeyDown={(e) => handleKey(i, e)}
-          onPaste={handlePaste}
-          onFocus={(e) => e.target.select()}
-          style={{
-            width:       48,
-            height:      56,
-            borderRadius: 10,
-            border:      `2px solid ${d ? C.primary : C.border}`,
-            background:  d ? '#F0F7F4' : C.white,
-            fontSize:    22,
-            fontWeight:  700,
-            color:       C.primary,
-            textAlign:   'center',
-            fontFamily:  'Inter',
-            outline:     'none',
-            transition:  'border-color .15s',
-            cursor:      disabled ? 'not-allowed' : 'text',
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 // ─── SignUpScreen ─────────────────────────────────────────────────────────────
 /**
- * SignUpScreen — 3-step registration flow.
- *
- * Step 1 — Phone: enter number → simulate OTP send
- * Step 2 — OTP:   verify 6-digit code (shown in demo banner)
- * Step 3 — Profile: name, specialisation, clinic, password
- *
- * @param {object[]} clinics   - Existing clinics to choose from.
- * @param {object[]} doctors   - Existing doctors (for duplicate phone check).
- * @param {Function} onRegister - Called with new doctor object on success.
- * @param {Function} onBack     - Navigate back to login screen.
+ * Single-step registration — email + profile → calls /api/auth/signup.
+ * On success: stores JWT, calls onRegister({ doctor, token }).
  */
-export function SignUpScreen({ clinics, doctors, onRegister, onBack }) {
-  const STEPS = 3;
-  const [step,    setStep]    = useState(0);
+export function SignUpScreen({ clinics, onRegister, onBack }) {
   const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
 
-  // Step 1
-  const [phone, setPhone] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-
-  // Step 2 — OTP (simulated: generated client-side, shown in demo banner)
-  const [generatedOtp, setGeneratedOtp] = useState('');
-  const [enteredOtp,   setEnteredOtp]   = useState('');
-  const [otpError,     setOtpError]     = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
-
-  // Step 3
   const [form, setForm] = useState({
-    name:           '',
-    specialisation: 'General Practitioner',
-    clinicId:       clinics[0]?.id ?? '',
-    password:       '',
-    confirmPassword:'',
-    regNumber:      '',
-    clinicHours:    'Mon–Sat, 9 AM – 6 PM',
-    yearsPractice:  '',
+    name:            '',
+    email:           '',
+    specialisation:  'General Practitioner',
+    clinicId:        clinics[0]?.id ?? '',
+    contact:         '',
+    clinicHours:     'Mon–Sat, 9 AM – 6 PM',
+    yearsPractice:   '',
+    password:        '',
+    confirmPassword: '',
   });
   const [formErrors, setFormErrors] = useState({});
 
-  const normalise = (s) => s.replace(/\D/g, '');
-
-  /* ── Resend cooldown timer ── */
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendCooldown]);
-
-  /* ── Step 1: Send OTP ── */
-  const handleSendOtp = () => {
-    const cleaned = normalise(phone);
-    if (cleaned.length < 10) { setPhoneError('Enter a valid 10-digit mobile number.'); return; }
-
-    const exists = doctors.some((d) => normalise(d.contact) === cleaned);
-    if (exists) { setPhoneError('An account with this number already exists. Please sign in.'); return; }
-
-    setPhoneError('');
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    setGeneratedOtp(otp);
-    setEnteredOtp('');
-    setResendCooldown(30);
-    setLoading(true);
-
-    // Simulate network delay
-    setTimeout(() => {
-      setLoading(false);
-      setStep(1);
-    }, 800);
+  const set = (field) => (e) => {
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+    setFormErrors((fe) => ({ ...fe, [field]: '' }));
+    setError('');
   };
 
-  /* ── Step 2: Verify OTP ── */
-  const handleVerifyOtp = () => {
-    if (enteredOtp.length < 6) { setOtpError('Please enter the 6-digit OTP.'); return; }
-    if (enteredOtp !== generatedOtp) { setOtpError('Incorrect OTP. Please try again.'); return; }
-
-    setOtpError('');
-    setLoading(true);
-    setTimeout(() => { setLoading(false); setStep(2); }, 400);
-  };
-
-  const handleResendOtp = () => {
-    if (resendCooldown > 0) return;
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    setGeneratedOtp(otp);
-    setEnteredOtp('');
-    setOtpError('');
-    setResendCooldown(30);
-  };
-
-  /* ── Step 3: Register ── */
-  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-
-  const validateProfile = () => {
+  const validate = () => {
     const errs = {};
-    if (!form.name.trim())           errs.name    = 'Full name is required.';
-    if (!form.clinicId)              errs.clinicId = 'Select a clinic.';
-    if (form.password.length < 8)    errs.password = 'Password must be at least 8 characters.';
+    if (!form.name.trim())         errs.name            = 'Full name is required.';
+    if (!form.email.trim())        errs.email           = 'Email is required.';
+    if (!/\S+@\S+\.\S+/.test(form.email)) errs.email   = 'Enter a valid email address.';
+    if (!form.clinicId)            errs.clinicId        = 'Select a clinic.';
+    if (form.password.length < 8)  errs.password        = 'Minimum 8 characters.';
     if (form.password !== form.confirmPassword)
       errs.confirmPassword = 'Passwords do not match.';
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleRegister = () => {
-    if (!validateProfile()) return;
+  const handleRegister = async () => {
+    if (!validate()) return;
     setLoading(true);
-
-    const newDoctor = {
-      id:             uid(),
-      name:           form.name.trim(),
-      specialisation: form.specialisation,
-      clinicId:       form.clinicId,
-      contact:        normalise(phone),
-      email:          '',
-      password:       form.password,
-      regNumber:      form.regNumber.trim(),
-      clinicHours:    form.clinicHours,
-      yearsPractice:  Number(form.yearsPractice) || 0,
-      createdAt:      new Date().toISOString(),
-    };
-
-    setTimeout(() => {
+    setError('');
+    try {
+      const result = await signup({
+        name:           form.name.trim(),
+        email:          form.email.trim().toLowerCase(),
+        password:       form.password,
+        specialisation: form.specialisation,
+        clinicId:       form.clinicId,
+        contact:        form.contact.trim() || undefined,
+        clinicHours:    form.clinicHours.trim() || undefined,
+        yearsPractice:  form.yearsPractice ? Number(form.yearsPractice) : undefined,
+      });
+      setToken(result.token);
+      onRegister(result);
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
       setLoading(false);
-      onRegister(newDoctor);
-    }, 500);
+    }
   };
 
   const clinicOptions = clinics.map((c) => ({ value: c.id, label: c.name }));
-
-  /* ─────────────────────────────────────────────────────────────── */
 
   return (
     <div
@@ -243,7 +88,7 @@ export function SignUpScreen({ clinics, doctors, onRegister, onBack }) {
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
-        padding:        16,
+        padding:        '24px 16px',
       }}
     >
       <div style={{ width: '100%', maxWidth: 460 }}>
@@ -266,20 +111,12 @@ export function SignUpScreen({ clinics, doctors, onRegister, onBack }) {
               HealthVault
             </span>
           </div>
-          <p style={{ fontSize: 13, color: C.muted }}>
-            {step === 0 && 'Create your doctor account'}
-            {step === 1 && 'Verify your mobile number'}
-            {step === 2 && 'Complete your profile'}
-          </p>
+          <p style={{ fontSize: 13, color: C.muted }}>Create your doctor account</p>
         </div>
-
-        {/* Step dots */}
-        <StepDots current={step} total={STEPS} />
 
         {/* ── Card ── */}
         <div
           className="fade-in"
-          key={step}
           style={{
             background:   C.white,
             borderRadius: 14,
@@ -288,223 +125,133 @@ export function SignUpScreen({ clinics, doctors, onRegister, onBack }) {
             boxShadow:    '0 2px 16px rgba(0,0,0,0.06)',
           }}
         >
+          <p style={{ fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 4 }}>
+            Your details
+          </p>
+          <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>
+            This information appears on your prescriptions and patient records.
+          </p>
 
-          {/* ══ STEP 1 — Phone ══ */}
-          {step === 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <p style={{ fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 4 }}>
-                  Enter your mobile number
-                </p>
-                <p style={{ fontSize: 13, color: C.muted }}>
-                  We'll send a one-time password to verify your identity.
-                </p>
-              </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+            <Input
+              label="Full name (with title)"
+              value={form.name}
+              onChange={set('name')}
+              placeholder="e.g. Dr. Anjali Verma"
+              required
+              error={formErrors.name}
+            />
+
+            <Input
+              label="Email address"
+              type="email"
+              value={form.email}
+              onChange={set('email')}
+              placeholder="e.g. anjali@healthvault.in"
+              required
+              error={formErrors.email}
+            />
+
+            <Select
+              label="Specialisation"
+              value={form.specialisation}
+              onChange={set('specialisation')}
+              options={SPEC_OPTIONS}
+              required
+            />
+
+            <Select
+              label="Clinic"
+              value={form.clinicId}
+              onChange={set('clinicId')}
+              options={clinicOptions}
+              required
+              error={formErrors.clinicId}
+            />
+
+            <Input
+              label="Contact number"
+              type="tel"
+              value={form.contact}
+              onChange={set('contact')}
+              placeholder="e.g. +91 98765 43210"
+            />
+
+            <Input
+              label="Clinic hours"
+              value={form.clinicHours}
+              onChange={set('clinicHours')}
+              placeholder="e.g. Mon–Sat, 9 AM – 6 PM"
+            />
+
+            <Input
+              label="Years of practice"
+              type="number"
+              value={form.yearsPractice}
+              onChange={set('yearsPractice')}
+              placeholder="e.g. 5"
+            />
+
+            <div style={{ display: 'grid', gap: 12 }}>
               <Input
-                label="Mobile number"
-                type="tel"
-                value={phone}
-                onChange={(e) => { setPhone(e.target.value); setPhoneError(''); }}
-                placeholder="10-digit number, e.g. 9876543210"
+                label="Password"
+                type="password"
+                value={form.password}
+                onChange={set('password')}
+                placeholder="Min. 8 characters"
                 required
-                error={phoneError}
+                error={formErrors.password}
               />
-
-              <Button
-                onClick={handleSendOtp}
-                disabled={loading}
-                style={{ width: '100%', justifyContent: 'center' }}
-              >
-                {loading ? 'Sending OTP…' : 'Send OTP'}
-              </Button>
-
-              <button
-                onClick={onBack}
-                style={{
-                  background: 'none', border: 'none', color: C.muted,
-                  fontSize: 13, cursor: 'pointer', fontFamily: 'Inter',
-                  textAlign: 'center', padding: 0,
-                }}
-              >
-                Already have an account?{' '}
-                <span style={{ color: C.secondary, fontWeight: 500 }}>Sign in</span>
-              </button>
+              <Input
+                label="Confirm password"
+                type="password"
+                value={form.confirmPassword}
+                onChange={set('confirmPassword')}
+                placeholder="Re-enter password"
+                required
+                error={formErrors.confirmPassword}
+              />
             </div>
-          )}
 
-          {/* ══ STEP 2 — OTP ══ */}
-          {step === 1 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <p style={{ fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 4 }}>
-                  Enter the OTP
-                </p>
-                <p style={{ fontSize: 13, color: C.muted }}>
-                  Sent to <strong>+91 {normalise(phone)}</strong>
-                </p>
-              </div>
-
-              {/* Demo OTP banner */}
+            {error && (
               <div
                 style={{
-                  background:   '#E8F5E9',
-                  border:       '1px solid #C8E6C9',
+                  background:   '#FFEBEE',
+                  border:       '1px solid #FFCDD2',
                   borderRadius: 8,
                   padding:      '10px 14px',
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          10,
+                  fontSize:     13,
+                  color:        C.error,
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={C.success}>
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-                <p style={{ fontSize: 13, color: C.success }}>
-                  Demo OTP: <strong style={{ letterSpacing: 2 }}>{generatedOtp}</strong>
-                </p>
+                {error}
               </div>
+            )}
 
-              <OtpInput
-                value={enteredOtp}
-                onChange={setEnteredOtp}
-                disabled={loading}
-              />
-
-              {otpError && (
-                <p style={{ fontSize: 13, color: C.error, textAlign: 'center' }}>{otpError}</p>
-              )}
-
-              <Button
-                onClick={handleVerifyOtp}
-                disabled={loading || enteredOtp.length < 6}
-                style={{ width: '100%', justifyContent: 'center' }}
-              >
-                {loading ? 'Verifying…' : 'Verify OTP'}
-              </Button>
-
-              <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: 13, color: C.muted }}>Didn't receive it? </span>
-                <button
-                  onClick={handleResendOtp}
-                  disabled={resendCooldown > 0}
-                  style={{
-                    background: 'none', border: 'none',
-                    color:      resendCooldown > 0 ? C.muted : C.secondary,
-                    fontSize:   13, fontWeight: 500, cursor: resendCooldown > 0 ? 'default' : 'pointer',
-                    fontFamily: 'Inter', padding: 0,
-                  }}
-                >
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
-                </button>
-              </div>
-
-              <button
-                onClick={() => setStep(0)}
-                style={{
-                  background: 'none', border: 'none', color: C.muted,
-                  fontSize: 12, cursor: 'pointer', fontFamily: 'Inter',
-                  textAlign: 'center', padding: 0,
-                }}
-              >
-                ← Change number
-              </button>
-            </div>
-          )}
-
-          {/* ══ STEP 3 — Profile ══ */}
-          {step === 2 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <p style={{ fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 4 }}>
-                  Complete your profile
-                </p>
-                <p style={{ fontSize: 13, color: C.muted }}>
-                  This information appears on your prescriptions and patient records.
-                </p>
-              </div>
-
-              <Input
-                label="Full name (with title)"
-                value={form.name}
-                onChange={set('name')}
-                placeholder="e.g. Dr. Anjali Verma"
-                required
-                error={formErrors.name}
-              />
-
-              <Select
-                label="Specialisation"
-                value={form.specialisation}
-                onChange={set('specialisation')}
-                options={SPEC_OPTIONS}
-                required
-              />
-
-              <Select
-                label="Clinic"
-                value={form.clinicId}
-                onChange={set('clinicId')}
-                options={clinicOptions}
-                required
-                error={formErrors.clinicId}
-              />
-
-              <Input
-                label="Medical registration number"
-                value={form.regNumber}
-                onChange={set('regNumber')}
-                placeholder="e.g. MH-12345"
-              />
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Input
-                  label="Password"
-                  type="password"
-                  value={form.password}
-                  onChange={set('password')}
-                  placeholder="Min. 8 characters"
-                  required
-                  error={formErrors.password}
-                />
-                <Input
-                  label="Confirm password"
-                  type="password"
-                  value={form.confirmPassword}
-                  onChange={set('confirmPassword')}
-                  placeholder="Re-enter password"
-                  required
-                  error={formErrors.confirmPassword}
-                />
-              </div>
-
-              <Button
-                onClick={handleRegister}
-                disabled={loading}
-                style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}
-              >
-                {loading ? 'Creating account…' : 'Create account'}
-              </Button>
-            </div>
-          )}
+            <Button
+              onClick={handleRegister}
+              disabled={loading}
+              style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}
+            >
+              {loading ? 'Creating account…' : 'Create account'}
+            </Button>
+          </div>
         </div>
 
-        {/* Back to sign-in link (steps 0 and 2) */}
-        {step !== 1 && (
-          <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: C.muted }}>
-            Already have an account?{' '}
-            <button
-              onClick={onBack}
-              style={{
-                background: 'none', border: 'none',
-                color: C.secondary, fontWeight: 500,
-                fontSize: 13, cursor: 'pointer', fontFamily: 'Inter', padding: 0,
-              }}
-            >
-              Sign in
-            </button>
-          </p>
-        )}
+        <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: C.muted }}>
+          Already have an account?{' '}
+          <button
+            onClick={onBack}
+            style={{
+              background: 'none', border: 'none',
+              color: C.secondary, fontWeight: 500,
+              fontSize: 13, cursor: 'pointer', fontFamily: 'Inter', padding: 0,
+            }}
+          >
+            Sign in
+          </button>
+        </p>
       </div>
     </div>
   );

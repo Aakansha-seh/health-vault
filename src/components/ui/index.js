@@ -4,4 +4,5 @@ export { Button }         from './Button';
 export { Card }           from './Card';
 export { Input }          from './Input';
 export { Select }         from './Select';
-export { SectionHeading } from './SectionHeading';
+export { SectionHeading }     from './SectionHeading';
+export { ConfirmLeaveModal }  from './ConfirmLeaveModal';

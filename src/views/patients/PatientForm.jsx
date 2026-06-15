@@ -1,26 +1,12 @@
 import { useState } from 'react';
 import { C } from '../../constants/theme';
 import { ICONS } from '../../constants/icons';
-import { Button, Card, Input, Select, SectionHeading } from '../../components/ui';
+import { Button, Card, Input, Select, SectionHeading, ConfirmLeaveModal } from '../../components/ui';
 import { uid } from '../../utils/helpers';
 
-const GENDER_OPTIONS = [
-  { value: 'Male',   label: 'Male'   },
-  { value: 'Female', label: 'Female' },
-  { value: 'Other',  label: 'Other'  },
-];
-
+const GENDER_OPTIONS     = ['Male', 'Female', 'Other'].map((v) => ({ value: v, label: v }));
 const BLOOD_GROUP_OPTIONS = ['A+','A−','B+','B−','AB+','AB−','O+','O−'].map((v) => ({ value: v, label: v }));
 
-/**
- * PatientForm — Add or edit a patient's demographic details.
- *
- * @param {object|null} patient    - Existing patient to edit, or null for new.
- * @param {string}      clinicId   - Active clinic ID, embedded into new patients.
- * @param {string}      doctorId   - Active doctor ID, embedded into new patients.
- * @param {Function}    onSave     - Called with the full patient object on save.
- * @param {Function}    onCancel   - Navigate back without saving.
- */
 export function PatientForm({ patient, clinicId, doctorId, onSave, onCancel }) {
   const isNew = !patient;
 
@@ -37,10 +23,19 @@ export function PatientForm({ patient, clinicId, doctorId, onSave, onCancel }) {
     emergencyContact:   patient?.emergencyContact   ?? '',
   });
 
-  const [errors, setErrors] = useState({});
+  const [errors,         setErrors]         = useState({});
+  const [isDirty,        setIsDirty]        = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
-  const set = (field) => (e) =>
+  const set = (field) => (e) => {
+    setIsDirty(true);
     setForm((f) => ({ ...f, [field]: e.target.value }));
+  };
+
+  const handleCancel = () => {
+    if (isDirty) setShowLeaveModal(true);
+    else onCancel();
+  };
 
   const validate = () => {
     const errs = {};
@@ -54,82 +49,38 @@ export function PatientForm({ patient, clinicId, doctorId, onSave, onCancel }) {
 
   const handleSave = () => {
     if (!validate()) return;
-
     const saved = isNew
-      ? {
-          ...form,
-          id:           uid(),
-          clinicId,
-          doctorId,
-          age:          Number(form.age),
-          isReturning:  false,
-          visits:       [],
-          createdAt:    new Date().toISOString(),
-        }
-      : {
-          ...patient,
-          ...form,
-          age: Number(form.age),
-        };
-
+      ? { ...form, id: uid(), clinicId, doctorId, age: Number(form.age), isReturning: false, visits: [], createdAt: new Date().toISOString() }
+      : { ...patient, ...form, age: Number(form.age) };
     onSave(saved);
   };
 
   const fieldRows = [
-    [
-      { field: 'name',             label: 'Full name',         required: true   },
-      { field: 'age',              label: 'Age',               required: true, type: 'number' },
-    ],
-    [
-      { field: 'phone',            label: 'Phone number',      required: true   },
-      { field: 'insurance',        label: 'Insurance / ABHA',  required: false  },
-    ],
-    [
-      { field: 'allergies',        label: 'Known allergies',   required: false  },
-      { field: 'chronicConditions',label: 'Chronic conditions',required: false  },
-    ],
-    [
-      { field: 'emergencyContact', label: 'Emergency contact', required: false  },
-      { field: 'address',          label: 'Address',           required: false  },
-    ],
+    [{ field: 'name',              label: 'Full name',          required: true             },
+     { field: 'age',               label: 'Age',                required: true, type: 'number' }],
+    [{ field: 'phone',             label: 'Phone number',       required: true             },
+     { field: 'insurance',         label: 'Insurance / ABHA',   required: false            }],
+    [{ field: 'allergies',         label: 'Known allergies',    required: false            },
+     { field: 'chronicConditions', label: 'Chronic conditions', required: false            }],
+    [{ field: 'emergencyContact',  label: 'Emergency contact',  required: false            },
+     { field: 'address',           label: 'Address',            required: false            }],
   ];
 
   return (
     <div className="fade-in">
-      {/* ── Page header ── */}
-      <div
-        style={{
-          display:        'flex',
-          alignItems:     'center',
-          justifyContent: 'space-between',
-          marginBottom:   20,
-          flexWrap:       'wrap',
-          gap:            10,
-        }}
-      >
+      <ConfirmLeaveModal
+        open={showLeaveModal}
+        onReturn={() => setShowLeaveModal(false)}
+        onDiscard={onCancel}
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <SectionHeading>{isNew ? 'Add new patient' : `Edit — ${patient.name}`}</SectionHeading>
         <button
-          onClick={onCancel}
-          style={{
-            display:    'flex',
-            alignItems: 'center',
-            gap:        6,
-            background: 'none',
-            border:     'none',
-            color:      C.secondary,
-            fontSize:   14,
-            cursor:     'pointer',
-            fontFamily: 'Inter',
-            padding:    0,
-          }}
+          onClick={handleCancel}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: C.secondary, fontSize: 14, cursor: 'pointer', fontFamily: 'Inter', padding: 0 }}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill={C.secondary}
-            style={{ transform: 'rotate(180deg)' }}
-          >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill={C.secondary} style={{ transform: 'rotate(180deg)' }}>
             <path d={ICONS.chevronRight} />
           </svg>
           {isNew ? 'Back to records' : 'Back to patient'}
@@ -138,57 +89,21 @@ export function PatientForm({ patient, clinicId, doctorId, onSave, onCancel }) {
 
       <Card style={{ maxWidth: 720 }}>
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-          {/* Field rows */}
           {fieldRows.map((row, ri) => (
-            <div
-              key={ri}
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}
-              className="form-row"
-            >
+            <div key={ri} className="form-row" style={{ display: 'grid', gap: 16 }}>
               {row.map(({ field, label, required, type }) => (
-                <Input
-                  key={field}
-                  label={label}
-                  value={form[field]}
-                  onChange={set(field)}
-                  type={type || 'text'}
-                  required={required}
-                  error={errors[field]}
-                />
+                <Input key={field} label={label} value={form[field]} onChange={set(field)} type={type || 'text'} required={required} error={errors[field]} />
               ))}
             </div>
           ))}
-
-          {/* Gender + Blood group */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Select
-              label="Gender"
-              value={form.gender}
-              onChange={set('gender')}
-              options={GENDER_OPTIONS}
-              required
-            />
-            <Select
-              label="Blood group"
-              value={form.bloodGroup}
-              onChange={set('bloodGroup')}
-              options={BLOOD_GROUP_OPTIONS}
-            />
+          <div className="form-row" style={{ display: 'grid', gap: 16 }}>
+            <Select label="Gender"      value={form.gender}     onChange={set('gender')}     options={GENDER_OPTIONS}      required />
+            <Select label="Blood group" value={form.bloodGroup} onChange={set('bloodGroup')} options={BLOOD_GROUP_OPTIONS} />
           </div>
         </div>
 
-        {/* ── Footer actions ── */}
-        <div
-          style={{
-            display:        'flex',
-            justifyContent: 'flex-end',
-            gap:            10,
-            padding:        '14px 24px',
-            borderTop:      `1px solid ${C.border}`,
-          }}
-        >
-          <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: `1px solid ${C.border}` }}>
+          <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
           <Button onClick={handleSave}>{isNew ? 'Add patient' : 'Save changes'}</Button>
         </div>
       </Card>

@@ -2,3 +2,5 @@ node_modules/
 CLAUDE.md
 FUTURE_IDEAS.md
 SETUP.md
+server/.env
+server/node_modules

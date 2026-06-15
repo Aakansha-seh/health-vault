@@ -204,7 +204,7 @@ export function DoctorProfile({ doctor, clinic, onSave }) {
         /* ── Edit form ── */
         <Card>
           <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="form-row" style={{ display: 'grid', gap: 16 }}>
               <Input
                 label="Full name"
                 value={form.name}
@@ -217,7 +217,7 @@ export function DoctorProfile({ doctor, clinic, onSave }) {
                 onChange={set('regNumber')}
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="form-row" style={{ display: 'grid', gap: 16 }}>
               <Select
                 label="Specialisation"
                 value={form.specialisation}
