@@ -15,14 +15,13 @@ const TestReportSchema = z.object({
 });
 
 const CreateVisitSchema = z.object({
-  date: z.string().min(1, 'Date required'),
-  reason: z.string().min(2, 'Reason required'),
-  previousHistory: z.string().optional(),
-  symptoms: z.string().optional(),
-  testsDone: z.string().optional(),
-  prescription: z.string().optional(),
-  progressSinceLastVisit: z.string().optional(),
-  testReports: z.array(TestReportSchema).optional(),
+  date:           z.string().min(1, 'Date required'),
+  chiefComplaint: z.string().min(2, 'Chief complaint required'),
+  examination:    z.string().optional(),
+  diagnosis:      z.string().optional(),
+  medications:    z.string().optional(),
+  notes:          z.string().optional(),
+  testReports:    z.array(TestReportSchema).optional(),
 });
 
 const UpdateVisitSchema = CreateVisitSchema.partial();
@@ -48,14 +47,13 @@ router.post('/:patientId/visits', authenticate, async (req, res, next) => {
       data: {
         patientId,
         doctorId: req.user.doctorId,
-        date: new Date(data.date),
-        reason: data.reason,
-        previousHistory: data.previousHistory,
-        symptoms: data.symptoms,
-        testsDone: data.testsDone,
-        prescription: data.prescription,
-        progressSinceLastVisit: data.progressSinceLastVisit,
-        testReports: data.testReports ?? [],
+        date:           new Date(data.date),
+        chiefComplaint: data.chiefComplaint,
+        examination:    data.examination,
+        diagnosis:      data.diagnosis,
+        medications:    data.medications,
+        notes:          data.notes,
+        testReports:    data.testReports ?? [],
       },
       include: {
         doctor: { select: { id: true, name: true, specialisation: true } },
@@ -94,14 +92,13 @@ router.patch('/:patientId/visits/:id', authenticate, async (req, res, next) => {
     const updated = await prisma.visit.update({
       where: { id },
       data: {
-        ...(data.date ? { date: new Date(data.date) } : {}),
-        ...(data.reason !== undefined ? { reason: data.reason } : {}),
-        ...(data.previousHistory !== undefined ? { previousHistory: data.previousHistory } : {}),
-        ...(data.symptoms !== undefined ? { symptoms: data.symptoms } : {}),
-        ...(data.testsDone !== undefined ? { testsDone: data.testsDone } : {}),
-        ...(data.prescription !== undefined ? { prescription: data.prescription } : {}),
-        ...(data.progressSinceLastVisit !== undefined ? { progressSinceLastVisit: data.progressSinceLastVisit } : {}),
-        ...(data.testReports !== undefined ? { testReports: data.testReports } : {}),
+        ...(data.date           ? { date: new Date(data.date) } : {}),
+        ...(data.chiefComplaint !== undefined ? { chiefComplaint: data.chiefComplaint } : {}),
+        ...(data.examination    !== undefined ? { examination:    data.examination }    : {}),
+        ...(data.diagnosis      !== undefined ? { diagnosis:      data.diagnosis }      : {}),
+        ...(data.medications    !== undefined ? { medications:    data.medications }    : {}),
+        ...(data.notes          !== undefined ? { notes:          data.notes }          : {}),
+        ...(data.testReports    !== undefined ? { testReports:    data.testReports }    : {}),
       },
       include: {
         doctor: { select: { id: true, name: true, specialisation: true } },

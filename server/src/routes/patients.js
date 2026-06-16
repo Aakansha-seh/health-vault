@@ -8,16 +8,30 @@ import { authenticate } from '../middleware/auth.js';
 const router = Router();
 
 const CreatePatientSchema = z.object({
-  name: z.string().min(2, 'Name required'),
-  age: z.coerce.number().int().positive('Age must be a positive integer'),
-  gender: z.enum(['Male', 'Female', 'Other'], { required_error: 'Gender required' }),
+  name:             z.string().min(2, 'Name required'),
+  age:              z.coerce.number().int().positive('Age must be a positive integer'),
+  gender:           z.enum(['Male', 'Female', 'Other'], { required_error: 'Gender required' }),
+  phone:            z.string().optional(),
+  bloodGroup:       z.string().optional(),
+  allergies:        z.string().optional(),
+  chronicConditions:z.string().optional(),
+  insurance:        z.string().optional(),
+  address:          z.string().optional(),
+  emergencyContact: z.string().optional(),
 });
 
 const UpdatePatientSchema = z.object({
-  name: z.string().min(2).optional(),
-  age: z.coerce.number().int().positive().optional(),
-  gender: z.enum(['Male', 'Female', 'Other']).optional(),
-  isReturning: z.boolean().optional(),
+  name:             z.string().min(2).optional(),
+  age:              z.coerce.number().int().positive().optional(),
+  gender:           z.enum(['Male', 'Female', 'Other']).optional(),
+  phone:            z.string().optional(),
+  bloodGroup:       z.string().optional(),
+  allergies:        z.string().optional(),
+  chronicConditions:z.string().optional(),
+  insurance:        z.string().optional(),
+  address:          z.string().optional(),
+  emergencyContact: z.string().optional(),
+  isReturning:      z.boolean().optional(),
 });
 
 // GET /api/patients — all patients for current clinic

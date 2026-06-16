@@ -363,6 +363,8 @@ export function PatientIntakeForm({
   const [errors,         setErrors]         = useState({});
   const [isDirty,        setIsDirty]        = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [saving,         setSaving]         = useState(false);
+  const [saveError,      setSaveError]      = useState('');
 
   // Run duplicate check whenever name or phone changes (not in visit mode)
   useEffect(() => {
@@ -434,35 +436,42 @@ export function PatientIntakeForm({
   };
 
   // ── Save ──
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
+    setSaving(true);
+    setSaveError('');
 
     const visitObj = hasConsultationData() ? {
-      id:             uid(),
       date:           consult.date,
       chiefComplaint: consult.chiefComplaint.trim(),
       examination:    serialiseVitals(),
       diagnosis:      consult.diagnosis.trim(),
       medications:    serialiseMeds(),
       notes:          consult.advice.trim(),
-      doctorId,
     } : null;
 
-    if (visitMode) {
-      // Just add a visit to the existing patient
-      onAddVisitOnly(patient.id, visitObj);
-    } else {
-      const newPatient = {
-        ...demo,
-        id:          uid(),
-        clinicId,
-        doctorId,
-        age:         Number(demo.age),
-        isReturning: false,
-        visits:      [],
-        createdAt:   new Date().toISOString(),
-      };
-      onSave(newPatient, visitObj);
+    try {
+      if (visitMode) {
+        await onAddVisitOnly(patient.id, visitObj);
+      } else {
+        const newPatient = {
+          name:              demo.name.trim(),
+          age:               Number(demo.age),
+          gender:            demo.gender,
+          phone:             demo.phone.trim() || undefined,
+          bloodGroup:        demo.bloodGroup || undefined,
+          allergies:         demo.allergies.trim() || undefined,
+          chronicConditions: demo.chronicConditions.trim() || undefined,
+          insurance:         demo.insurance.trim() || undefined,
+          address:           demo.address.trim() || undefined,
+          emergencyContact:  demo.emergencyContact.trim() || undefined,
+        };
+        await onSave(newPatient, visitObj);
+      }
+    } catch (err) {
+      setSaveError(err?.response?.data?.error ?? err.message ?? 'Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -679,23 +688,32 @@ export function PatientIntakeForm({
         position: 'sticky', bottom: 0, left: 0, right: 0,
         background: 'rgba(248,249,252,.96)', backdropFilter: 'blur(8px)',
         borderTop: `1px solid ${C.border}`, padding: '12px 0',
-        display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8,
+        display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8,
         boxShadow: '0 -2px 12px rgba(0,0,0,.06)',
       }}>
-        <button
-          onClick={handleCancel}
-          style={{ padding: '10px 22px', borderRadius: 7, border: `1px solid ${C.border}`, background: C.white, color: C.muted, cursor: 'pointer', fontFamily: 'Inter', fontSize: 14 }}
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          style={{ padding: '10px 28px', borderRadius: 7, border: 'none', background: C.primary, color: C.white, cursor: 'pointer', fontFamily: 'Inter', fontSize: 14, fontWeight: 600, transition: 'opacity .12s' }}
-          onMouseEnter={(e) => (e.currentTarget.style.opacity = '.88')}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-        >
-          {saveLabel}
-        </button>
+        {saveError && (
+          <div style={{ background: '#FFEBEE', border: '1px solid #FFCDD2', borderRadius: 7, padding: '8px 14px', fontSize: 13, color: C.error }}>
+            {saveError}
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button
+            onClick={handleCancel}
+            disabled={saving}
+            style={{ padding: '10px 22px', borderRadius: 7, border: `1px solid ${C.border}`, background: C.white, color: C.muted, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 14, opacity: saving ? 0.5 : 1 }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{ padding: '10px 28px', borderRadius: 7, border: 'none', background: C.primary, color: C.white, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 14, fontWeight: 600, transition: 'opacity .12s', opacity: saving ? 0.7 : 1 }}
+            onMouseEnter={(e) => { if (!saving) e.currentTarget.style.opacity = '.88'; }}
+            onMouseLeave={(e) => { if (!saving) e.currentTarget.style.opacity = '1'; }}
+          >
+            {saving ? 'Saving…' : saveLabel}
+          </button>
+        </div>
       </div>
     </div>
   );

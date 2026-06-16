@@ -77,13 +77,20 @@ model Doctor {
 }
 
 model Patient {
-  id          String   @id @default(cuid())
-  name        String
-  age         Int
-  gender      Gender
-  isReturning Boolean  @default(false)
-  clinicId    String
-  createdAt   DateTime @default(now())
+  id                String   @id @default(cuid())
+  name              String
+  age               Int
+  gender            Gender
+  phone             String?
+  bloodGroup        String?
+  allergies         String?
+  chronicConditions String?
+  insurance         String?
+  address           String?
+  emergencyContact  String?
+  isReturning       Boolean  @default(false)
+  clinicId          String
+  createdAt         DateTime @default(now())
 
   clinic       Clinic        @relation(fields: [clinicId], references: [id])
   visits       Visit[]
@@ -91,18 +98,17 @@ model Patient {
 }
 
 model Visit {
-  id                      String   @id @default(cuid())
-  patientId               String
-  doctorId                String?
-  date                    DateTime
-  reason                  String
-  previousHistory         String?
-  symptoms                String?
-  testsDone               String?
-  prescription            String?
-  progressSinceLastVisit  String?
-  testReports             Json?    // Array of { name, url, type }
-  createdAt               DateTime @default(now())
+  id             String   @id @default(cuid())
+  patientId      String
+  doctorId       String?
+  date           DateTime
+  chiefComplaint String
+  examination    String?
+  diagnosis      String?
+  medications    String?
+  notes          String?
+  testReports    Json?    // Array of { name, url, type }
+  createdAt      DateTime @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
   doctor  Doctor? @relation(fields: [doctorId], references: [id], onDelete: SetNull)

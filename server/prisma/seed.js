@@ -20,7 +20,7 @@ async function main() {
   const passwordHash = await bcrypt.hash('MediRecord@2025', 12);
 
   // ── Clinics ────────────────────────────────────────────────────────────────
-  const c1 = await prisma.clinic.create({
+  await prisma.clinic.create({
     data: {
       id: 'c1',
       name: 'HealthVault Clinic',
@@ -30,7 +30,7 @@ async function main() {
     },
   });
 
-  const c2 = await prisma.clinic.create({
+  await prisma.clinic.create({
     data: {
       id: 'c2',
       name: 'HealthVault Wellness',
@@ -43,7 +43,7 @@ async function main() {
   console.log('✅  Clinics created');
 
   // ── Doctors ────────────────────────────────────────────────────────────────
-  const d1 = await prisma.doctor.create({
+  await prisma.doctor.create({
     data: {
       id: 'd1',
       name: 'Dr. Aakansha Singh',
@@ -57,7 +57,7 @@ async function main() {
     },
   });
 
-  const d2 = await prisma.doctor.create({
+  await prisma.doctor.create({
     data: {
       id: 'd2',
       name: 'Dr. Rohan Mehta',
@@ -71,7 +71,7 @@ async function main() {
     },
   });
 
-  const d3 = await prisma.doctor.create({
+  await prisma.doctor.create({
     data: {
       id: 'd3',
       name: 'Dr. Priyanka Sharma',
@@ -88,67 +88,103 @@ async function main() {
   console.log('✅  Doctors created');
 
   // ── Patients ───────────────────────────────────────────────────────────────
-  const p1 = await prisma.patient.create({
+  await prisma.patient.create({
     data: {
       id: 'p1',
       name: 'Aarav Sharma',
       age: 34,
       gender: 'Male',
+      phone: '+91 98765 11001',
+      bloodGroup: 'B+',
+      allergies: 'Penicillin',
+      chronicConditions: 'Mild hypertension',
+      emergencyContact: 'Neha Sharma — +91 98765 11002',
+      address: 'A-14, Vasant Vihar, New Delhi 110057',
       isReturning: true,
       clinicId: 'c1',
     },
   });
 
-  const p2 = await prisma.patient.create({
+  await prisma.patient.create({
     data: {
       id: 'p2',
       name: 'Sunita Verma',
       age: 52,
       gender: 'Female',
+      phone: '+91 98765 22001',
+      bloodGroup: 'O+',
+      allergies: 'Sulfa drugs',
+      chronicConditions: 'Type 2 Diabetes, Coronary Artery Disease (post PTCA)',
+      emergencyContact: 'Amit Verma — +91 98765 22002',
+      address: 'B-7, Green Park, New Delhi 110016',
       isReturning: true,
       clinicId: 'c1',
     },
   });
 
-  const p3 = await prisma.patient.create({
+  await prisma.patient.create({
     data: {
       id: 'p3',
       name: 'Karan Patel',
       age: 28,
       gender: 'Male',
+      phone: '+91 98765 33001',
+      bloodGroup: 'A+',
+      allergies: 'NSAIDs (gastric intolerance)',
+      chronicConditions: '',
+      emergencyContact: '',
+      address: 'C-22, Lajpat Nagar, New Delhi 110024',
       isReturning: false,
       clinicId: 'c1',
     },
   });
 
-  const p4 = await prisma.patient.create({
+  await prisma.patient.create({
     data: {
       id: 'p4',
       name: 'Meera Iyer',
       age: 41,
       gender: 'Female',
+      phone: '+91 98765 44001',
+      bloodGroup: 'AB+',
+      allergies: '',
+      chronicConditions: 'Hypothyroidism (on Eltroxin)',
+      emergencyContact: 'Ravi Iyer — +91 98765 44002',
+      address: 'D-3, Saket, New Delhi 110017',
       isReturning: true,
       clinicId: 'c1',
     },
   });
 
-  const p5 = await prisma.patient.create({
+  await prisma.patient.create({
     data: {
       id: 'p5',
       name: 'Divya Nair',
       age: 29,
       gender: 'Female',
+      phone: '+91 98765 55001',
+      bloodGroup: 'B−',
+      allergies: '',
+      chronicConditions: 'PCOS (under evaluation)',
+      emergencyContact: 'Suresh Nair — +91 98765 55002',
+      address: '12, Bandra West, Mumbai 400050',
       isReturning: false,
       clinicId: 'c2',
     },
   });
 
-  const p6 = await prisma.patient.create({
+  await prisma.patient.create({
     data: {
       id: 'p6',
       name: 'Rajan Bose',
       age: 65,
       gender: 'Male',
+      phone: '+91 98765 66001',
+      bloodGroup: 'O−',
+      allergies: '',
+      chronicConditions: 'COPD (GOLD Stage II), Hypertension',
+      emergencyContact: 'Ananya Bose — +91 98765 66002',
+      address: '45, Worli Sea Face, Mumbai 400018',
       isReturning: true,
       clinicId: 'c2',
     },
@@ -158,18 +194,17 @@ async function main() {
 
   // ── Visits ─────────────────────────────────────────────────────────────────
 
-  // p1 – Aarav Sharma (returning, c1) — 2 visits
+  // p1 – Aarav Sharma — 2 visits
   await prisma.visit.create({
     data: {
       patientId: 'p1',
       doctorId: 'd1',
       date: new Date('2025-10-15'),
-      reason: 'Fever and body ache',
-      previousHistory: 'Mild hypertension since 2022',
-      symptoms: 'High grade fever (102°F), generalised body ache, fatigue',
-      testsDone: 'CBC, Dengue NS1 Ag, Malaria RDT',
-      prescription: 'Tab Paracetamol 650mg TDS × 5 days, Tab Dolo 650 SOS, ORS sachets, adequate hydration',
-      progressSinceLastVisit: null,
+      chiefComplaint: 'Fever and body ache for 3 days',
+      examination: 'Temp 102°F · Pulse 96 bpm · BP 130/84 mmHg · SpO₂ 97% · Generalised body ache, fatigue. No rash.',
+      diagnosis: 'Viral fever — Dengue ruled out (NS1 negative). Probable viral syndrome.',
+      medications: 'Tab Paracetamol 650mg — TDS × 5 days\nTab Dolo 650 — SOS for fever > 101°F\nORS sachets — TDS × 3 days',
+      notes: 'Advised adequate rest and 3L fluid intake per day. Follow up if fever persists beyond 5 days.',
       testReports: [
         { name: 'CBC Report', url: 'https://example.com/reports/p1_cbc.pdf', type: 'pdf' },
         { name: 'Dengue NS1', url: 'https://example.com/reports/p1_dengue.pdf', type: 'pdf' },
@@ -182,30 +217,28 @@ async function main() {
       patientId: 'p1',
       doctorId: 'd1',
       date: new Date('2026-01-20'),
-      reason: 'Follow-up — hypertension management',
-      previousHistory: 'Hypertension, past dengue episode Oct 2025',
-      symptoms: 'Occasional headache, BP 148/92 mmHg at home',
-      testsDone: 'BP monitoring, Lipid profile, Kidney function test',
-      prescription: 'Tab Amlodipine 5mg OD, Tab Telma 40mg OD, low-sodium diet advised',
-      progressSinceLastVisit: 'Fever resolved. BP slightly elevated. Started antihypertensives.',
+      chiefComplaint: 'Follow-up — hypertension management, occasional headaches',
+      examination: 'BP 148/92 mmHg · Pulse 78 bpm · Weight 82 kg · SpO₂ 99%. Fundoscopy: grade 1 hypertensive retinopathy.',
+      diagnosis: 'Primary hypertension — uncontrolled. Lipid profile mildly deranged.',
+      medications: 'Tab Amlodipine 5mg — OD morning\nTab Telmisartan 40mg — OD morning\nTab Atorvastatin 10mg — HS',
+      notes: 'Low-sodium diet. 30 min brisk walk daily. Avoid alcohol. Repeat BP check in 4 weeks. Lipid profile after 3 months.',
       testReports: [
         { name: 'Lipid Profile', url: 'https://example.com/reports/p1_lipid.pdf', type: 'pdf' },
       ],
     },
   });
 
-  // p2 – Sunita Verma (returning, c1) — 2 visits
+  // p2 – Sunita Verma — 2 visits
   await prisma.visit.create({
     data: {
       patientId: 'p2',
       doctorId: 'd2',
       date: new Date('2025-09-05'),
-      reason: 'Chest discomfort and breathlessness on exertion',
-      previousHistory: 'Type 2 Diabetes (on Metformin), family history of CAD',
-      symptoms: 'Exertional chest tightness, dyspnoea on climbing stairs, palpitations',
-      testsDone: 'ECG, 2D Echo, TMT, HbA1c',
-      prescription: 'Tab Aspirin 75mg OD, Tab Atorvastatin 20mg HS, Tab Metoprolol 25mg BD — referred to cardiology OPD',
-      progressSinceLastVisit: null,
+      chiefComplaint: 'Chest discomfort and breathlessness on climbing stairs',
+      examination: 'BP 136/88 mmHg · Pulse 84 bpm · SpO₂ 96% on exertion · ECG: ST depression V4–V6. Heart sounds normal. No murmur.',
+      diagnosis: 'Stable angina pectoris. Suspected significant CAD. TMT positive. Referred for coronary angiography.',
+      medications: 'Tab Aspirin 75mg — OD after breakfast\nTab Atorvastatin 40mg — HS\nTab Metoprolol 25mg — BD\nTab Isosorbide mononitrate 10mg — BD',
+      notes: 'Strict physical rest until angiography. Avoid strenuous activity. Low-fat diet. Diabetologist consult for HbA1c 8.2%.',
       testReports: [
         { name: 'ECG', url: 'https://example.com/reports/p2_ecg.pdf', type: 'pdf' },
         { name: '2D Echo', url: 'https://example.com/reports/p2_echo.pdf', type: 'pdf' },
@@ -218,44 +251,41 @@ async function main() {
       patientId: 'p2',
       doctorId: 'd2',
       date: new Date('2026-02-10'),
-      reason: 'Cardiology follow-up post angioplasty',
-      previousHistory: 'CAD, PTCA done Nov 2025, DM2',
-      symptoms: 'Well controlled, no chest pain, mild ankle swelling',
-      testsDone: 'ECG, Echo, HbA1c, renal profile',
-      prescription: 'Continue dual antiplatelet, Statin, Beta-blocker. Added Tab Furosemide 20mg OD for oedema.',
-      progressSinceLastVisit: 'Post PTCA recovery satisfactory. Ejection fraction improved to 52%.',
+      chiefComplaint: 'Cardiology follow-up post angioplasty — mild ankle swelling',
+      examination: 'BP 128/80 mmHg · Pulse 72 bpm · SpO₂ 98% · Bilateral mild pedal oedema +1. Chest clear. EF 52% on echo.',
+      diagnosis: 'Post-PTCA (Nov 2025) — satisfactory recovery. Mild cardiac failure — NYHA class I. HbA1c 7.4% (improved).',
+      medications: 'Tab Aspirin 75mg — OD (continue)\nTab Clopidogrel 75mg — OD (continue dual antiplatelet × 1 year)\nTab Atorvastatin 40mg — HS\nTab Metoprolol 25mg — BD\nTab Furosemide 20mg — OD morning (for oedema)',
+      notes: 'Strict fluid restriction 1.5L/day. Weigh daily — report if weight gain > 2 kg in 2 days. Follow up in 3 months with Echo and renal profile.',
       testReports: [],
     },
   });
 
-  // p3 – Karan Patel (new, c1) — 1 visit
+  // p3 – Karan Patel — 1 visit
   await prisma.visit.create({
     data: {
       patientId: 'p3',
       doctorId: 'd1',
       date: new Date('2026-05-18'),
-      reason: 'Severe acidity and abdominal pain',
-      previousHistory: 'No significant past history. Frequent NSAID use for gym-related pain.',
-      symptoms: 'Epigastric burning, nausea post meals, occasional belching',
-      testsDone: 'H. pylori breath test, UGI endoscopy advised',
-      prescription: 'Tab Pantoprazole 40mg AC BD × 2 weeks, Tab Ondansetron 4mg SOS, dietary advice (avoid spicy/oily food)',
-      progressSinceLastVisit: null,
+      chiefComplaint: 'Severe acidity, epigastric burning after meals, nausea for 2 weeks',
+      examination: 'Temp 37.1°C · BP 118/76 mmHg · Epigastric tenderness on deep palpation. No guarding. Bowel sounds normal.',
+      diagnosis: 'Peptic ulcer disease — H. pylori positive (breath test). NSAID-induced gastric injury.',
+      medications: 'Tab Pantoprazole 40mg — BD (before meals) × 4 weeks\nTab Clarithromycin 500mg — BD × 14 days\nTab Amoxicillin 1g — BD × 14 days\nSyrup Sucralfate 10ml — TDS (30 min before meals)',
+      notes: 'Stop all NSAIDs immediately. Avoid spicy, oily, caffeinated foods. Small frequent meals. H. pylori eradication — retest after 4 weeks. UGI endoscopy if no improvement.',
       testReports: [],
     },
   });
 
-  // p4 – Meera Iyer (returning, c1) — 2 visits
+  // p4 – Meera Iyer — 2 visits
   await prisma.visit.create({
     data: {
       patientId: 'p4',
       doctorId: 'd1',
       date: new Date('2025-11-22'),
-      reason: 'Hypothyroidism review',
-      previousHistory: 'Hypothyroidism since 2019, on Eltroxin 50mcg',
-      symptoms: 'Fatigue, weight gain (3 kg in 3 months), hair fall',
-      testsDone: 'TSH, T3, T4, CBC',
-      prescription: 'Increase Eltroxin to 75mcg OD (empty stomach). Repeat TFT after 6 weeks.',
-      progressSinceLastVisit: null,
+      chiefComplaint: 'Fatigue, weight gain of 3 kg in 3 months, hair fall',
+      examination: 'Wt 68 kg (↑3 kg since last visit) · BP 116/74 mmHg · Pulse 62 bpm · Dry skin, periorbital puffiness. Thyroid not palpable. TSH 8.4 mIU/L.',
+      diagnosis: 'Hypothyroidism — inadequately controlled (TSH elevated). Dose adjustment needed.',
+      medications: 'Tab Eltroxin (Levothyroxine) 75mcg — OD empty stomach (increased from 50mcg)',
+      notes: 'Take Eltroxin 30 min before food. Avoid calcium/iron supplements within 4 hours. Repeat TFT in 6 weeks. Hair fall expected to improve once TSH normalises.',
       testReports: [
         { name: 'TFT Report', url: 'https://example.com/reports/p4_tft.pdf', type: 'pdf' },
       ],
@@ -267,30 +297,28 @@ async function main() {
       patientId: 'p4',
       doctorId: 'd1',
       date: new Date('2026-03-05'),
-      reason: 'Thyroid follow-up',
-      previousHistory: 'Hypothyroidism, dose increased Nov 2025',
-      symptoms: 'Energy improved, weight stable, hair fall reduced',
-      testsDone: 'TSH, T4',
-      prescription: 'Continue Eltroxin 75mcg OD. Repeat TFT in 3 months.',
-      progressSinceLastVisit: 'TSH normalised to 2.8 mIU/L. Significant clinical improvement.',
+      chiefComplaint: 'Thyroid follow-up — energy improved, hair fall reduced',
+      examination: 'Wt 66 kg (↓2 kg) · BP 112/72 mmHg · Pulse 68 bpm · Skin less dry. TSH 2.8 mIU/L (normal range 0.5–5.0).',
+      diagnosis: 'Hypothyroidism — well controlled on current dose. Clinical improvement confirmed.',
+      medications: 'Tab Eltroxin 75mcg — OD empty stomach (continue same dose)',
+      notes: 'Continue current dose. Repeat TFT in 3 months. Can add biotin supplement for residual hair fall. Good progress!',
       testReports: [
         { name: 'TFT Follow-up', url: 'https://example.com/reports/p4_tft2.pdf', type: 'pdf' },
       ],
     },
   });
 
-  // p5 – Divya Nair (new, c2) — 1 visit
+  // p5 – Divya Nair — 1 visit
   await prisma.visit.create({
     data: {
       patientId: 'p5',
       doctorId: 'd3',
       date: new Date('2026-04-12'),
-      reason: 'Irregular menstrual cycles',
-      previousHistory: 'No significant history. Menarche at 13.',
-      symptoms: 'Cycles varying 21–45 days, mild cramping, acne on jaw',
-      testsDone: 'Pelvic USG, Hormonal panel (FSH, LH, AMH, Prolactin, DHEA-S), HbA1c',
-      prescription: 'Tab Metformin 500mg BD (if PCOS confirmed), lifestyle modification — weight management, low GI diet',
-      progressSinceLastVisit: null,
+      chiefComplaint: 'Irregular menstrual cycles (21–45 day variation), mild pelvic cramping, facial acne',
+      examination: 'BMI 26.4 · BP 112/70 mmHg · Acne on jaw and chin. Mild hirsutism. Pelvic USG: Polycystic ovaries (12 follicles right, 10 left). No adnexal mass. LH:FSH ratio 2.8:1.',
+      diagnosis: 'Polycystic Ovarian Syndrome (PCOS) — Rotterdam criteria met (oligomenorrhea + polycystic ovaries + clinical hyperandrogenism).',
+      medications: 'Tab Metformin 500mg — BD with meals × 3 months\nCap Inositol 2g — OD\nOral contraceptive (if contraception needed — discuss)',
+      notes: 'Weight loss of 5–7% significantly improves PCOS. Low glycaemic index diet. 45 min cardio 5x/week. Follow-up with full hormonal panel results in 4 weeks.',
       testReports: [
         { name: 'Pelvic USG', url: 'https://example.com/reports/p5_usg.pdf', type: 'pdf' },
         { name: 'Hormonal Panel', url: 'https://example.com/reports/p5_hormones.pdf', type: 'pdf' },
@@ -298,18 +326,17 @@ async function main() {
     },
   });
 
-  // p6 – Rajan Bose (returning, c2) — 1 visit
+  // p6 – Rajan Bose — 1 visit
   await prisma.visit.create({
     data: {
       patientId: 'p6',
       doctorId: 'd3',
       date: new Date('2026-05-02'),
-      reason: 'Annual wellness check + COPD management',
-      previousHistory: 'COPD (GOLD Stage II), ex-smoker (40 pack-years), BP controlled on medication',
-      symptoms: 'Stable breathlessness (mMRC grade 1), morning cough with mucus, no fever',
-      testsDone: 'Spirometry, ABG, Chest X-ray, CBC, CMP',
-      prescription: 'Continue Tiotropium 18mcg inhaler OD, Salbutamol SOS. Added Tab Carbocisteine 375mg TDS for sputum. Flu vaccine administered.',
-      progressSinceLastVisit: 'FEV1 stable at 62% predicted. No exacerbations in past 6 months.',
+      chiefComplaint: 'Annual wellness review — stable breathlessness (mMRC grade 1), morning productive cough',
+      examination: 'SpO₂ 94% at rest, 89% post 6MWT · BP 132/82 mmHg · Pulse 76 bpm · Barrel chest. Diffuse wheeze on auscultation. FEV1 62% predicted (stable). No pedal oedema.',
+      diagnosis: 'COPD — GOLD Stage II, stable. Hypertension controlled. No acute exacerbation.',
+      medications: 'Tiotropium 18mcg inhaler — OD morning (continue)\nSalbutamol 100mcg inhaler — SOS\nTab Carbocisteine 375mg — TDS × 4 weeks\nInfluenza vaccine administered',
+      notes: 'Absolute smoking cessation (already ex-smoker since 2020 — reinforce). Pulmonary rehabilitation referral given. Avoid cold air exposure. Next spirometry in 6 months. ER if SpO₂ < 90% at rest.',
       testReports: [
         { name: 'Spirometry Report', url: 'https://example.com/reports/p6_spirometry.pdf', type: 'pdf' },
         { name: 'Chest X-Ray', url: 'https://example.com/reports/p6_xray.jpg', type: 'image' },
@@ -320,7 +347,6 @@ async function main() {
   console.log('✅  Visits created');
 
   // ── Appointments ───────────────────────────────────────────────────────────
-  // 2 past completed
   await prisma.appointment.create({
     data: {
       id: 'apt1',
@@ -351,7 +377,6 @@ async function main() {
     },
   });
 
-  // 3 future scheduled
   await prisma.appointment.create({
     data: {
       id: 'apt3',
@@ -401,16 +426,16 @@ async function main() {
 
   // ── Audit Logs ─────────────────────────────────────────────────────────────
   const auditEntries = [
-    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'LOGIN', details: 'Doctor logged in', timestamp: new Date('2026-06-14T09:00:00Z') },
-    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'VIEW_PATIENT', details: 'Viewed patient: Aarav Sharma (p1)', timestamp: new Date('2026-06-14T09:05:00Z') },
-    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'ADD_VISIT', details: 'Added visit for patient: Aarav Sharma (p1)', timestamp: new Date('2026-06-14T09:20:00Z') },
-    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'ADD_APPOINTMENT', details: 'Scheduled appointment for Karan Patel on 2026-07-08', timestamp: new Date('2026-06-14T09:35:00Z') },
-    { doctorId: 'd2', doctorName: 'Dr. Rohan Mehta', clinicId: 'c1', action: 'LOGIN', details: 'Doctor logged in', timestamp: new Date('2026-06-14T10:00:00Z') },
-    { doctorId: 'd2', doctorName: 'Dr. Rohan Mehta', clinicId: 'c1', action: 'VIEW_PATIENT', details: 'Viewed patient: Sunita Verma (p2)', timestamp: new Date('2026-06-14T10:10:00Z') },
-    { doctorId: 'd2', doctorName: 'Dr. Rohan Mehta', clinicId: 'c1', action: 'PRINT_PRESCRIPTION', details: 'Printed prescription for Sunita Verma', timestamp: new Date('2026-06-14T10:25:00Z') },
-    { doctorId: 'd2', doctorName: 'Dr. Rohan Mehta', clinicId: 'c1', action: 'LOGOUT', details: 'Doctor logged out', timestamp: new Date('2026-06-14T11:00:00Z') },
-    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'EDIT_PROFILE', details: 'Updated clinic hours', timestamp: new Date('2026-06-14T11:30:00Z') },
-    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'LOCK_SESSION', details: 'Session locked after inactivity', timestamp: new Date('2026-06-14T12:45:00Z') },
+    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'LOGIN',              details: 'Doctor logged in',                              timestamp: new Date('2026-06-14T09:00:00Z') },
+    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'VIEW_PATIENT',       details: 'Viewed patient: Aarav Sharma',                  timestamp: new Date('2026-06-14T09:05:00Z') },
+    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'ADD_VISIT',          details: 'Added visit for Aarav Sharma',                  timestamp: new Date('2026-06-14T09:20:00Z') },
+    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'ADD_APPOINTMENT',    details: 'Scheduled appointment for Karan Patel 2026-07-08', timestamp: new Date('2026-06-14T09:35:00Z') },
+    { doctorId: 'd2', doctorName: 'Dr. Rohan Mehta',    clinicId: 'c1', action: 'LOGIN',              details: 'Doctor logged in',                              timestamp: new Date('2026-06-14T10:00:00Z') },
+    { doctorId: 'd2', doctorName: 'Dr. Rohan Mehta',    clinicId: 'c1', action: 'VIEW_PATIENT',       details: 'Viewed patient: Sunita Verma',                  timestamp: new Date('2026-06-14T10:10:00Z') },
+    { doctorId: 'd2', doctorName: 'Dr. Rohan Mehta',    clinicId: 'c1', action: 'PRINT_PRESCRIPTION', details: 'Printed prescription for Sunita Verma',         timestamp: new Date('2026-06-14T10:25:00Z') },
+    { doctorId: 'd2', doctorName: 'Dr. Rohan Mehta',    clinicId: 'c1', action: 'LOGOUT',             details: 'Doctor logged out',                             timestamp: new Date('2026-06-14T11:00:00Z') },
+    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'EDIT_PROFILE',       details: 'Updated clinic hours',                          timestamp: new Date('2026-06-14T11:30:00Z') },
+    { doctorId: 'd1', doctorName: 'Dr. Aakansha Singh', clinicId: 'c1', action: 'LOCK_SESSION',       details: 'Session locked after inactivity',               timestamp: new Date('2026-06-14T12:45:00Z') },
   ];
 
   for (const entry of auditEntries) {
@@ -421,9 +446,9 @@ async function main() {
   console.log('\n🎉  Seed complete! HealthVault is ready.');
   console.log('\nLogin credentials:');
   console.log('  All doctors → password: MediRecord@2025');
-  console.log('  Dr. Aakansha Singh  → email: aakansha@healthvault.in (Clinic: Delhi)');
-  console.log('  Dr. Rohan Mehta     → email: rohan@healthvault.in    (Clinic: Delhi)');
-  console.log('  Dr. Priyanka Sharma → email: priyanka@healthvault.in (Clinic: Mumbai)');
+  console.log('  Dr. Aakansha Singh  → aakansha@healthvault.in  (Delhi clinic)');
+  console.log('  Dr. Rohan Mehta     → rohan@healthvault.in     (Delhi clinic)');
+  console.log('  Dr. Priyanka Sharma → priyanka@healthvault.in  (Mumbai clinic)');
 }
 
 main()
