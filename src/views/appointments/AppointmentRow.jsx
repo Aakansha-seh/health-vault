@@ -67,11 +67,11 @@ export function AppointmentRow({ appt, patient, doctor, clinic, onUpdate }) {
             <svg width="13" height="13" viewBox="0 0 24 24" fill={C.white}><path d={ICONS.calendar} /></svg>
             GCal
           </Button>
-          <Button variant="secondary" small onClick={() => onUpdate(appt.id, 'completed')}>
+          <Button variant="secondary" small onClick={() => onUpdate(appt.id, { status: 'completed' })}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill={C.primary}><path d={ICONS.check} /></svg>
             Done
           </Button>
-          <Button variant="danger"    small onClick={() => onUpdate(appt.id, 'cancelled')}>
+          <Button variant="danger"    small onClick={() => onUpdate(appt.id, { status: 'cancelled' })}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill={C.white}><path d={ICONS.cancel} /></svg>
             Cancel
           </Button>

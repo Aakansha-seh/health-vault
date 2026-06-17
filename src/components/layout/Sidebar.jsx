@@ -4,11 +4,11 @@ import { Button } from '../ui/Button';
 import { NavItem } from './NavItem';
 
 const NAV_ITEMS = [
-  { key: 'patients',     iconKey: 'patients',  label: 'Patient records'  },
-  { key: 'appointments', iconKey: 'calendar',  label: 'Appointments'     },
-  { key: 'dashboard',    iconKey: 'dashboard', label: 'Dashboard'        },
-  { key: 'audit',        iconKey: 'audit',     label: 'Audit log'        },
-  { key: 'profile',      iconKey: 'profile',   label: 'Doctor profile'   },
+  { key: 'patients',     iconKey: 'patients',  label: 'Patient records', tourId: 'nav-patients'     },
+  { key: 'appointments', iconKey: 'calendar',  label: 'Appointments',    tourId: 'nav-appointments' },
+  { key: 'dashboard',    iconKey: 'dashboard', label: 'Dashboard',       tourId: 'nav-dashboard'    },
+  { key: 'audit',        iconKey: 'audit',     label: 'Audit log',       tourId: 'nav-audit'        },
+  { key: 'profile',      iconKey: 'profile',   label: 'Doctor profile',  tourId: 'nav-profile'      },
 ];
 
 /**
@@ -81,13 +81,14 @@ export function Sidebar({ view, setView, doctor, clinic, loginTime, onLock }) {
 
       {/* ── Navigation ── */}
       <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
-        {NAV_ITEMS.map(({ key, iconKey, label }) => (
+        {NAV_ITEMS.map(({ key, iconKey, label, tourId }) => (
           <NavItem
             key={key}
             iconKey={iconKey}
             label={label}
             active={view === key}
             onClick={() => setView(key)}
+            tourId={tourId}
           />
         ))}
       </nav>
@@ -125,7 +126,7 @@ export function Sidebar({ view, setView, doctor, clinic, loginTime, onLock }) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill={C.primary}>
             <path d={ICONS.lock} />
           </svg>
-          Lock session
+          Sign out
         </Button>
       </div>
     </aside>

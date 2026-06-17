@@ -187,10 +187,12 @@ export function PatientList({ patients, onSelect, onAddNew, onAddVisit }) {
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
         <SectionHeading>Patient records</SectionHeading>
-        <Button variant="amber" small onClick={onAddNew}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill={C.white}><path d={ICONS.plus} /></svg>
-          Add patient
-        </Button>
+        <div data-tour="add-patient">
+          <Button variant="amber" small onClick={onAddNew}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill={C.white}><path d={ICONS.plus} /></svg>
+            Add patient
+          </Button>
+        </div>
       </div>
 
       {/* ── Stats strip ── */}

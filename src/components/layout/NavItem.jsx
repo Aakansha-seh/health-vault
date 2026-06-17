@@ -11,12 +11,13 @@ import { ICONS } from '../../constants/icons';
  * @param {boolean}     active
  * @param {Function}    onClick
  */
-export function NavItem({ iconKey, label, active, onClick }) {
+export function NavItem({ iconKey, label, active, onClick, tourId }) {
   const [hovered, setHovered] = useState(false);
 
   return (
     <div
       onClick={onClick}
+      data-tour={tourId}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

@@ -30,11 +30,30 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 globally — clear token and reload to show LoginScreen
+// Global response handling:
+//   1. Surface the backend's human-readable error on err.message so forms/toasts
+//      can show "Invalid email or password" instead of "Request failed with status code 401".
+//   2. On a 401 from a *protected* request (expired/invalid session), reset to the
+//      login screen — but NEVER for an in-progress login/signup attempt, whose 401
+//      simply means "wrong credentials" and must reach the form unmodified.
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const url = err.config?.url ?? '';
+    const isAuthAttempt = url.includes('/auth/login') || url.includes('/auth/signup');
+    const status = err.response?.status;
+
+    // Normalise the error message for the UI
+    const serverError = err.response?.data?.error;
+    if (serverError) {
+      err.message = serverError;
+    } else if (err.code === 'ECONNABORTED') {
+      err.message = 'Request timed out. Please check your connection and try again.';
+    } else if (!err.response) {
+      err.message = 'Cannot reach the server. Please make sure it is running and try again.';
+    }
+
+    if (status === 401 && !isAuthAttempt) {
       localStorage.removeItem(TOKEN_KEY);
       window.location.reload();
     }

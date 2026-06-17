@@ -16,13 +16,22 @@ import dashboardRouter from './routes/dashboard.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:5173';
+
+// Accept one or more comma-separated origins (e.g. "http://localhost:3000,http://localhost:5173")
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || 'http://localhost:3000,http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 
 // ── Security & parsing ────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(
   cors({
-    origin: ALLOWED_ORIGIN,
+    origin(origin, callback) {
+      // Allow same-origin / non-browser requests (no Origin header) and any whitelisted origin.
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -51,7 +60,7 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`\n🏥  HealthVault API running on http://localhost:${PORT}`);
-  console.log(`    CORS allowed: ${ALLOWED_ORIGIN}`);
+  console.log(`    CORS allowed: ${ALLOWED_ORIGINS.join(', ')}`);
   console.log(`    Environment: ${process.env.NODE_ENV || 'development'}\n`);
 });
 

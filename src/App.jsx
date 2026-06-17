@@ -23,6 +23,9 @@ import { Dashboard }        from './views/dashboard/Dashboard';
 import { AuditLogView }     from './views/audit/AuditLogView';
 import { DoctorProfile }    from './views/profile/DoctorProfile';
 
+// ── Onboarding ──
+import { OnboardingTour } from './components/OnboardingTour';
+
 // ── Design tokens ──
 import { C } from './constants/theme';
 
@@ -36,6 +39,8 @@ export default function App() {
   // Auth state
   const [doctor,      setDoctor]      = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [showTour,    setShowTour]    = useState(false);
+  const [loginTime,   setLoginTime]   = useState(null);
 
   // Data state (all scoped to current doctor's clinic by the backend)
   const [clinics,      setClinics]      = useState([]);
@@ -69,7 +74,7 @@ export default function App() {
     const token = getToken();
     if (!token) { setAuthLoading(false); return; }
     getMe()
-      .then((doc) => { setDoctor(doc); return loadData(); })
+      .then((doc) => { setDoctor(doc); setLoginTime(new Date()); return loadData(); })
       .catch(() => clearToken())
       .finally(() => setAuthLoading(false));
   }, [loadData]);
@@ -92,15 +97,20 @@ export default function App() {
   /* ── Auth handlers ── */
   const handleLogin = useCallback(async ({ doctor: doc }) => {
     setDoctor(doc);
+    setLoginTime(new Date());
     await loadData();
     setView('patients');
+    // Returning sign-in: never auto-launch the onboarding tour.
   }, [loadData]);
 
   const handleRegister = useCallback(async ({ doctor: doc }) => {
     setDoctor(doc);
+    setLoginTime(new Date());
     await loadData();
     setAuthScreen('login');
     setView('patients');
+    // Brand-new account: show the welcome tour exactly once, right after signup.
+    setShowTour(true);
   }, [loadData]);
 
   const handleLogout = useCallback(() => {
@@ -238,7 +248,14 @@ export default function App() {
           fontFamily: 'Inter, sans-serif',
         }}
       >
-        <Sidebar view={view} setView={setView} doctor={doctor} onLogout={handleLogout} />
+        <Sidebar
+          view={view}
+          setView={setView}
+          doctor={doctor}
+          clinic={clinic}
+          loginTime={loginTime}
+          onLock={handleLogout}
+        />
 
         <main
           style={{
@@ -297,6 +314,17 @@ export default function App() {
 
         <BottomNav view={view} setView={setView} />
       </div>
+
+      {/* ── Onboarding tour (first login only) ── */}
+      {showTour && (
+        <OnboardingTour
+          onComplete={() => setShowTour(false)}
+          onAddFirstPatient={() => {
+            setShowTour(false);
+            setView('patients');
+          }}
+        />
+      )}
     </>
   );
 }
