@@ -1,115 +1,104 @@
 // Visit routes — nested under /api/patients/:patientId/visits
-// POST /api/patients/:patientId/visits
-// PATCH /api/patients/:patientId/visits/:id
 import { Router } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticateCredential } from '../middleware/auth.js';
+import { writeAudit } from '../lib/audit.js';
 
 const router = Router();
 
-const TestReportSchema = z.object({
-  name: z.string(),
-  url: z.string().url(),
-  type: z.string(),
-});
-
 const CreateVisitSchema = z.object({
-  date:           z.string().min(1, 'Date required'),
-  chiefComplaint: z.string().min(2, 'Chief complaint required'),
-  examination:    z.string().optional(),
-  diagnosis:      z.string().optional(),
-  medications:    z.string().optional(),
-  notes:          z.string().optional(),
-  testReports:    z.array(TestReportSchema).optional(),
+  doctorProfileId: z.string().min(1),
+  date:            z.string().min(1),
+  chiefComplaint:  z.string().min(1),
+  diagnosis:       z.string().optional(),
+  prescription:    z.string().optional(),
+  notes:           z.string().optional(),
+  followUpDate:    z.string().optional(),
 });
 
-const UpdateVisitSchema = CreateVisitSchema.partial();
+const UpdateVisitSchema = CreateVisitSchema.omit({ doctorProfileId: true, date: true }).partial();
 
-// Helper: verify patient belongs to caller's clinic
-async function verifyPatientAccess(patientId, clinicId) {
-  const patient = await prisma.patient.findFirst({
-    where: { id: patientId, clinicId },
-  });
-  return patient;
-}
-
-// POST /api/patients/:patientId/visits
-router.post('/:patientId/visits', authenticate, async (req, res, next) => {
+router.post('/:patientId/visits', authenticateCredential, async (req, res, next) => {
   try {
     const { patientId } = req.params;
-    const patient = await verifyPatientAccess(patientId, req.user.clinicId);
-    if (!patient) return res.status(404).json({ error: 'Patient not found' });
-
     const data = CreateVisitSchema.parse(req.body);
+
+    const profile = await prisma.doctorProfile.findFirst({
+      where: { id: data.doctorProfileId, hospitalId: req.actor.hospitalId },
+    });
+    if (!profile) return res.status(404).json({ error: 'Doctor profile not found' });
+
+    // Verify access (READ_WRITE required)
+    const access = await prisma.profileAccess.findUnique({
+      where: { credentialId_doctorProfileId: { credentialId: req.actor.id, doctorProfileId: data.doctorProfileId } },
+    });
+    if (!access) return res.status(403).json({ error: 'You do not have access to this doctor profile' });
+    if (access.permission !== 'READ_WRITE') return res.status(403).json({ error: 'Write access required. Request it from your administrator.' });
+
+    const patient = await prisma.patient.findFirst({ where: { id: patientId, hospitalId: req.actor.hospitalId } });
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
     const visit = await prisma.visit.create({
       data: {
         patientId,
-        doctorId: req.user.doctorId,
+        doctorProfileId: data.doctorProfileId,
         date:           new Date(data.date),
         chiefComplaint: data.chiefComplaint,
-        examination:    data.examination,
         diagnosis:      data.diagnosis,
-        medications:    data.medications,
+        prescription:   data.prescription,
         notes:          data.notes,
-        testReports:    data.testReports ?? [],
+        followUpDate:   data.followUpDate ? new Date(data.followUpDate) : null,
+        createdBy:      req.actor.id,
       },
-      include: {
-        doctor: { select: { id: true, name: true, specialisation: true } },
-      },
+      include: { doctorProfile: { select: { id: true, name: true } } },
     });
 
-    // Mark patient as returning if they have more than 1 visit
     const visitCount = await prisma.visit.count({ where: { patientId } });
     if (visitCount > 1 && !patient.isReturning) {
       await prisma.patient.update({ where: { id: patientId }, data: { isReturning: true } });
     }
 
+    await writeAudit({
+      actor: req.actor, action: 'VISIT_CREATED',
+      target: { type: 'Patient', id: patientId, label: patient.name },
+      details: `Visit for ${profile.name}`,
+      ipAddress: req.ip,
+    });
+
     res.status(201).json(visit);
   } catch (err) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: err.issues });
-    }
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
     next(err);
   }
 });
 
-// PATCH /api/patients/:patientId/visits/:id
-router.patch('/:patientId/visits/:id', authenticate, async (req, res, next) => {
+router.patch('/:patientId/visits/:id', authenticateCredential, async (req, res, next) => {
   try {
     const { patientId, id } = req.params;
+    const visit = await prisma.visit.findFirst({
+      where: { id, patientId, patient: { hospitalId: req.actor.hospitalId } },
+    });
+    if (!visit) return res.status(404).json({ error: 'Visit not found' });
 
-    const patient = await verifyPatientAccess(patientId, req.user.clinicId);
-    if (!patient) return res.status(404).json({ error: 'Patient not found' });
-
-    // Verify visit belongs to this patient
-    const existing = await prisma.visit.findFirst({ where: { id, patientId } });
-    if (!existing) return res.status(404).json({ error: 'Visit not found' });
+    const access = await prisma.profileAccess.findUnique({
+      where: { credentialId_doctorProfileId: { credentialId: req.actor.id, doctorProfileId: visit.doctorProfileId } },
+    });
+    if (!access || access.permission !== 'READ_WRITE') {
+      return res.status(403).json({ error: 'Write access required' });
+    }
 
     const data = UpdateVisitSchema.parse(req.body);
-
     const updated = await prisma.visit.update({
       where: { id },
-      data: {
-        ...(data.date           ? { date: new Date(data.date) } : {}),
-        ...(data.chiefComplaint !== undefined ? { chiefComplaint: data.chiefComplaint } : {}),
-        ...(data.examination    !== undefined ? { examination:    data.examination }    : {}),
-        ...(data.diagnosis      !== undefined ? { diagnosis:      data.diagnosis }      : {}),
-        ...(data.medications    !== undefined ? { medications:    data.medications }    : {}),
-        ...(data.notes          !== undefined ? { notes:          data.notes }          : {}),
-        ...(data.testReports    !== undefined ? { testReports:    data.testReports }    : {}),
-      },
-      include: {
-        doctor: { select: { id: true, name: true, specialisation: true } },
-      },
+      data,
+      include: { doctorProfile: { select: { id: true, name: true } } },
     });
 
+    await writeAudit({ actor: req.actor, action: 'VISIT_UPDATED', target: { type: 'Visit', id }, ipAddress: req.ip });
     res.json(updated);
   } catch (err) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: err.issues });
-    }
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
     next(err);
   }
 });

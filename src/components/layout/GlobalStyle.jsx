@@ -7,15 +7,38 @@ export function GlobalStyle() {
 
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+      html, body {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+
       body {
         font-family: 'Inter', sans-serif;
         background: ${C.bg};
         color: ${C.text};
         -webkit-font-smoothing: antialiased;
-        overflow-x: hidden;
       }
 
-      input, textarea, select { font-family: 'Inter', sans-serif; outline: none; }
+      /* App root must never exceed the viewport width. */
+      #root { max-width: 100vw; overflow-x: clip; }
+
+      /* ── Global overflow guards ──
+         Flex/grid children default to min-width:auto, which lets wide content
+         (long unbreakable usernames, tables, etc.) push the layout past the
+         viewport. These rules keep every screen in-bounds at any width. */
+      main { min-width: 0; max-width: 100%; }
+      img, svg, video, canvas { max-width: 100%; height: auto; }
+      table { max-width: 100%; }
+
+      input, textarea, select { font-family: 'Inter', sans-serif; outline: none; max-width: 100%; }
+
+      /* Wrap any wide table in this so it scrolls inside its card instead of
+         breaking the page. */
+      .hv-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+      /* Break long unbreakable tokens (emails, IDs) instead of forcing width. */
+      .hv-break { overflow-wrap: anywhere; word-break: break-word; }
+      /* (responsive overflow guards) */
 
       ::-webkit-scrollbar       { width: 4px; }
       ::-webkit-scrollbar-track { background: transparent; }
@@ -34,6 +57,69 @@ export function GlobalStyle() {
       @keyframes drawEKG {
         from { stroke-dashoffset: 1500; }
         to   { stroke-dashoffset: 0; }
+      }
+
+      /* ── AI summary: staggered reveal + generating shimmer ── */
+      @keyframes hv-reveal {
+        from { opacity: 0; transform: translateY(7px); }
+        to   { opacity: 1; transform: none; }
+      }
+      @keyframes hv-pulse {
+        0%, 100% { transform: scale(1);    opacity: 1;   }
+        50%      { transform: scale(1.08); opacity: 0.65; }
+      }
+      @keyframes hv-shimmer {
+        0%   { background-position: 100% 0; }
+        100% { background-position: -100% 0; }
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .hv-ai-pulse { animation: hv-pulse 1.4s ease-in-out infinite; }
+      .hv-shimmer {
+        background: linear-gradient(90deg, ${C.bg} 25%, ${C.border} 37%, ${C.bg} 63%);
+        background-size: 400% 100%;
+        animation: hv-shimmer 1.4s ease infinite;
+      }
+
+      /* ── Tabular numerals: align columns of vitals / IDs / timestamps / labs ── */
+      .hv-num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
+
+      /* ── Skeleton loading block (replaces spinners on data fetch) ── */
+      .hv-skeleton {
+        position: relative;
+        overflow: hidden;
+        background: ${C.gray[100]};
+        border-radius: 6px;
+      }
+      .hv-skeleton::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+        animation: hv-sweep 1.3s ease-in-out infinite;
+      }
+      @keyframes hv-sweep { 100% { transform: translateX(100%); } }
+
+      /* ── Fast (<150ms) press feedback on interactive elements ── */
+      .hv-press { transition: transform .1s ease, background .12s ease, box-shadow .12s ease; }
+      .hv-press:active { transform: translateY(0.5px) scale(0.985); }
+
+      /* ── Accessible keyboard focus — single green accent ring ── */
+      :focus-visible {
+        outline: 2px solid ${C.secondary};
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+      /* Don't double-ring elements that draw their own focus border */
+      input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
+
+      /* ── Respect reduced-motion preferences ── */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+        }
       }
 
       /* ─────────────────────────────────────────────────────

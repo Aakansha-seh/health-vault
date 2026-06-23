@@ -1,6 +1,57 @@
+# ─── Secrets / environment (NEVER commit) ────────────────────────────────────
+# Contains DB password, JWT secret, AI provider keys, Razorpay keys,
+# Azure Storage connection string, etc.
+.env
+.env.*
+**/.env
+**/.env.*
+# ...but keep the templates tracked:
+!.env.example
+!**/.env.example
+
+# Other secret material
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cert
+secrets/
+credentials.json
+serviceAccount*.json
+
+# ─── Dependencies ─────────────────────────────────────────────────────────────
 node_modules/
+**/node_modules/
+
+# ─── Build / generated output ─────────────────────────────────────────────────
+dist/
+dev-dist/
+build/
+.vite/
+# Prisma generated client / engines
+**/.prisma/
+server/prisma/generated/
+
+# ─── Logs & debug ─────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── Coverage / test output ───────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─── Editor / OS cruft ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ─── Project docs intentionally kept private ──────────────────────────────────
 CLAUDE.md
 FUTURE_IDEAS.md
-SETUP.md
-server/.env
-server/node_modules

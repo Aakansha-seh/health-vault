@@ -1,161 +1,116 @@
-// Auth routes — POST /api/auth/login, /signup, GET /api/auth/me
+// Auth routes
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import prisma from '../lib/prisma.js';
 import { authenticate } from '../middleware/auth.js';
+import { writeAudit } from '../lib/audit.js';
+import { authLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
+const EXPIRES = process.env.JWT_EXPIRES_IN || '12h';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const DOCTOR_SELECT = {
-  id: true,
-  name: true,
-  email: true,
-  specialisation: true,
-  contact: true,
-  clinicHours: true,
-  yearsPractice: true,
-  clinicId: true,
-  createdAt: true,
-  clinic: { select: { id: true, name: true, address: true, phone: true } },
-};
-
-function signToken(doctor) {
-  return jwt.sign(
-    { doctorId: doctor.id, clinicId: doctor.clinicId, doctorName: doctor.name },
-    process.env.JWT_SECRET,
-    { expiresIn: '12h' }
-  );
-}
-
-async function writeAudit(doctorId, doctorName, clinicId, action, details) {
-  try {
-    await prisma.auditLog.create({ data: { doctorId, doctorName, clinicId, action, details } });
-  } catch (_) {
-    // non-fatal — never let audit failure break auth
-  }
-}
-
-// ── POST /api/auth/login ──────────────────────────────────────────────────────
-const LoginSchema = z.object({
-  email: z.string().email('Invalid email'),
-  password: z.string().min(1, 'Password required'),
+const AdminLoginSchema = z.object({
+  email:    z.string().email(),
+  password: z.string().min(1),
 });
 
-router.post('/login', async (req, res, next) => {
+router.post('/admin/login', authLimiter, async (req, res, next) => {
   try {
-    const { email, password } = LoginSchema.parse(req.body);
-
-    const doctor = await prisma.doctor.findUnique({
+    const { email, password } = AdminLoginSchema.parse(req.body);
+    const admin = await prisma.admin.findUnique({
       where: { email },
-      include: { clinic: { select: { id: true, name: true, address: true, phone: true } } },
+      include: { hospital: { select: { id: true, name: true } } },
     });
-
-    if (!doctor) {
+    if (!admin || !(await bcrypt.compare(password, admin.passwordHash))) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-
-    const valid = await bcrypt.compare(password, doctor.password);
-    if (!valid) {
-      return res.status(401).json({ error: 'Invalid email or password' });
-    }
-
-    const token = signToken(doctor);
-
-    // Server-side audit entry for login
-    await writeAudit(doctor.id, doctor.name, doctor.clinicId, 'LOGIN', 'Doctor logged in');
-
-    // Never return password
-    const { password: _pw, ...safeDoctor } = doctor;
-    return res.json({ token, doctor: safeDoctor });
+    const token = jwt.sign(
+      { type: 'admin', adminId: admin.id, hospitalId: admin.hospitalId, name: admin.name },
+      process.env.JWT_SECRET,
+      { expiresIn: EXPIRES }
+    );
+    await prisma.admin.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
+    await writeAudit({
+      actor: { type: 'admin', id: admin.id, hospitalId: admin.hospitalId, name: admin.name },
+      action: 'ADMIN_LOGIN', details: 'Admin logged in', ipAddress: req.ip,
+    });
+    const { passwordHash: _, ...safeAdmin } = admin;
+    return res.json({ token, actor: { type: 'admin', ...safeAdmin } });
   } catch (err) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: err.issues });
-    }
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
     next(err);
   }
 });
 
-// ── POST /api/auth/signup ─────────────────────────────────────────────────────
-const SignupSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Invalid email'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  specialisation: z.string().min(2, 'Specialisation required'),
-  clinicId: z.string().min(1, 'Clinic required'),
-  contact: z.string().optional(),
-  clinicHours: z.string().optional(),
-  yearsPractice: z.coerce.number().int().nonnegative().optional(),
+const CredentialLoginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
 });
 
-router.post('/signup', async (req, res, next) => {
+router.post('/login', authLimiter, async (req, res, next) => {
   try {
-    const data = SignupSchema.parse(req.body);
-
-    // Check clinic exists
-    const clinic = await prisma.clinic.findUnique({ where: { id: data.clinicId } });
-    if (!clinic) {
-      return res.status(400).json({ error: 'Clinic not found' });
-    }
-
-    // Check email uniqueness
-    const existing = await prisma.doctor.findUnique({ where: { email: data.email } });
-    if (existing) {
-      return res.status(409).json({ error: 'A doctor with this email already exists' });
-    }
-
-    const passwordHash = await bcrypt.hash(data.password, 12);
-
-    const doctor = await prisma.doctor.create({
-      data: {
-        name: data.name,
-        email: data.email,
-        password: passwordHash,
-        specialisation: data.specialisation,
-        clinicId: data.clinicId,
-        contact: data.contact,
-        clinicHours: data.clinicHours,
-        yearsPractice: data.yearsPractice,
-      },
-      select: {
-        ...DOCTOR_SELECT,
-        clinic: { select: { id: true, name: true, address: true, phone: true } },
-      },
+    const { username, password } = CredentialLoginSchema.parse(req.body);
+    const credential = await prisma.credential.findUnique({
+      where: { username },
+      include: { hospital: { select: { id: true, name: true } } },
     });
-
-    const token = signToken(doctor);
-    await writeAudit(doctor.id, doctor.name, doctor.clinicId, 'LOGIN', 'Doctor account created and logged in');
-
-    return res.status(201).json({ token, doctor });
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: err.issues });
+    if (!credential || !(await bcrypt.compare(password, credential.passwordHash))) {
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
+    if (!credential.isActive) {
+      return res.status(403).json({ error: 'This account has been deactivated. Contact your administrator.' });
+    }
+    const token = jwt.sign(
+      { type: 'credential', credentialId: credential.id, hospitalId: credential.hospitalId, role: credential.role, label: credential.label },
+      process.env.JWT_SECRET,
+      { expiresIn: EXPIRES }
+    );
+    await prisma.credential.update({ where: { id: credential.id }, data: { lastLoginAt: new Date() } });
+    await writeAudit({
+      actor: { type: 'credential', id: credential.id, hospitalId: credential.hospitalId, role: credential.role, label: credential.label },
+      action: 'CREDENTIAL_LOGIN', details: `${credential.role} logged in`, ipAddress: req.ip,
+    });
+    const { passwordHash: _, ...safeCredential } = credential;
+    return res.json({ token, actor: { type: 'credential', ...safeCredential } });
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
     next(err);
   }
 });
 
-// ── GET /api/auth/me ──────────────────────────────────────────────────────────
 router.get('/me', authenticate, async (req, res, next) => {
   try {
-    const doctor = await prisma.doctor.findUnique({
-      where: { id: req.user.doctorId },
-      select: {
-        ...DOCTOR_SELECT,
-        clinic: { select: { id: true, name: true, address: true, phone: true } },
+    if (req.actor.type === 'admin') {
+      const admin = await prisma.admin.findUnique({
+        where: { id: req.actor.id },
+        include: { hospital: { select: { id: true, name: true, address: true, phone: true } } },
+      });
+      if (!admin) return res.status(404).json({ error: 'Admin not found' });
+      const { passwordHash: _, ...safe } = admin;
+      return res.json({ type: 'admin', ...safe });
+    }
+    const credential = await prisma.credential.findUnique({
+      where: { id: req.actor.id },
+      include: {
+        hospital: { select: { id: true, name: true } },
+        subscription: { select: { tier: true, status: true, currentPeriodEnd: true } },
+        profileAccesses: {
+          include: { doctorProfile: { select: { id: true, name: true, specialty: true } } },
+        },
       },
     });
+    if (!credential) return res.status(404).json({ error: 'Credential not found' });
+    const { passwordHash: _, ...safe } = credential;
+    return res.json({ type: 'credential', ...safe });
+  } catch (err) { next(err); }
+});
 
-    if (!doctor) {
-      return res.status(404).json({ error: 'Doctor not found' });
-    }
-
-    return res.json(doctor);
-  } catch (err) {
-    next(err);
-  }
+router.post('/logout', authenticate, async (req, res) => {
+  const action = req.actor.type === 'admin' ? 'ADMIN_LOGOUT' : 'CREDENTIAL_LOGOUT';
+  await writeAudit({ actor: req.actor, action, ipAddress: req.ip });
+  return res.json({ message: 'Logged out successfully' });
 });
 
 export default router;

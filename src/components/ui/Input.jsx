@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { C } from '../../constants/theme';
+import { C, radii, tnum } from '../../constants/theme';
 
 /**
  * Input — text field or multiline textarea with consistent styling.
@@ -15,6 +15,7 @@ import { C } from '../../constants/theme';
  * @param {boolean} multiline   - Renders a <textarea> instead of <input>.
  * @param {number}  rows        - Row count for textarea (default 3).
  * @param {boolean} disabled
+ * @param {boolean} numeric     - Use tabular figures (for vitals / IDs / labs).
  */
 export function Input({
   label,
@@ -28,6 +29,7 @@ export function Input({
   multiline  = false,
   rows       = 3,
   disabled   = false,
+  numeric    = false,
 }) {
   const [focused, setFocused] = useState(false);
 
@@ -36,21 +38,23 @@ export function Input({
   const fieldStyle = {
     width:        '100%',
     padding:      rightEl ? '9px 40px 9px 12px' : '9px 12px',
-    borderRadius: 6,
+    borderRadius: radii.md,
     border:       `1px solid ${borderColor}`,
-    background:   disabled ? C.bg : C.white,
+    background:   disabled ? C.gray[50] : C.white,
     fontSize:     14,
-    color:        C.text,
+    color:        C.ink,
     fontFamily:   'Inter',
     resize:       multiline ? 'vertical' : 'none',
-    transition:   'border-color .15s',
+    transition:   'border-color .15s, box-shadow .15s',
     outline:      'none',
+    boxShadow:    focused && !error ? `0 0 0 3px ${C.secondary}22` : 'none',
+    ...(numeric ? tnum : null),
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {label && (
-        <label style={{ fontSize: 13, fontWeight: 500, color: C.primary }}>
+        <label style={{ fontSize: 13, fontWeight: 500, color: C.ink }}>
           {label}
           {required && <span style={{ color: C.error }}> *</span>}
         </label>

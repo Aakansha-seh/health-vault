@@ -10,7 +10,7 @@ const DOCTOR_SELECT = {
   id: true,
   name: true,
   email: true,
-  specialisation: true,
+  specialty: true,
   contact: true,
   clinicHours: true,
   yearsPractice: true,
@@ -21,7 +21,7 @@ const DOCTOR_SELECT = {
 
 const UpdateDoctorSchema = z.object({
   name: z.string().min(2).optional(),
-  specialisation: z.string().min(2).optional(),
+  specialty: z.string().min(2).optional(),
   contact: z.string().optional(),
   clinicHours: z.string().optional(),
   yearsPractice: z.coerce.number().int().nonnegative().optional(),

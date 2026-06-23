@@ -1,17 +1,17 @@
-import { shadow, radius } from '../../constants/theme';
+import { C, shadows, radii } from '../../constants/theme';
 
 /**
- * Card — standard white surface with shadow and border.
- * Accepts an optional `style` prop for overrides.
+ * Card — standard white surface. Crisp hairline border + low-spread shadow for a
+ * precise (not bubbly) feel. Accepts an optional `style` prop for overrides.
  */
 export function Card({ children, style }) {
   return (
     <div
       style={{
-        background:   '#FFFFFF',
-        borderRadius: radius,
-        boxShadow:    shadow,
-        border:       '1px solid #E0EDE8',
+        background:   C.surface,
+        borderRadius: radii.lg,
+        boxShadow:    shadows.xs,
+        border:       `1px solid ${C.border}`,
         ...style,
       }}
     >

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { C, radii, shadows } from '../../constants/theme';
 
 /**
  * Button — multi-variant action element.
@@ -6,21 +7,26 @@ import { useState } from 'react';
  * @param {'primary'|'secondary'|'amber'|'ghost'|'danger'|'gcal'} variant
  * @param {boolean} small   - Compact size (padding / font-size).
  * @param {boolean} disabled
+ * @param {string}  type    - Native button type (default 'button').
+ *
+ * Notes: solid variants carry a hairline shadow for precision; all variants get
+ * fast (<150ms) hover + press feedback via the shared `.hv-press` utility.
  */
 
 const BASE = {
   display:      'inline-flex',
   alignItems:   'center',
+  justifyContent: 'center',
   gap:          6,
-  borderRadius: 6,
+  borderRadius: radii.md,
   border:       'none',
   fontFamily:   'Inter',
   fontWeight:   600,
-  transition:   'background .15s, opacity .15s',
+  lineHeight:   1,
   cursor:       'pointer',
 };
 
-export function Button({ children, onClick, variant = 'primary', small = false, disabled = false, style: sx }) {
+export function Button({ children, onClick, variant = 'primary', small = false, disabled = false, type = 'button', style: sx }) {
   const [hovered, setHovered] = useState(false);
 
   const sizeStyle = {
@@ -29,21 +35,23 @@ export function Button({ children, onClick, variant = 'primary', small = false, 
   };
 
   const VARIANTS = {
-    primary:   { background: hovered ? '#15302A' : '#1A3C34', color: '#FFFFFF' },
-    secondary: { background: hovered ? '#F0F7F4' : '#FFFFFF',  color: '#1A3C34', border: '1px solid #E0EDE8' },
-    amber:     { background: hovered ? '#B8731F' : '#D4882A', color: '#FFFFFF' },
-    ghost:     { background: hovered ? '#F0F7F4' : 'transparent', color: '#1A3C34' },
-    danger:    { background: hovered ? '#B71C1C' : '#C62828', color: '#FFFFFF' },
-    gcal:      { background: hovered ? '#1557A0' : '#1a73e8', color: '#FFFFFF' },
+    primary:   { background: hovered ? C.primaryHover : C.primary, color: C.white, boxShadow: shadows.xs },
+    secondary: { background: hovered ? C.gray[50] : C.white, color: C.ink, border: `1px solid ${C.border}`, boxShadow: shadows.xs },
+    amber:     { background: hovered ? '#B45309' : C.amber, color: C.white, boxShadow: shadows.xs },
+    ghost:     { background: hovered ? C.gray[100] : 'transparent', color: C.ink },
+    danger:    { background: hovered ? '#B91C1C' : C.critical, color: C.white, boxShadow: shadows.xs },
+    gcal:      { background: hovered ? '#1557A0' : '#1a73e8', color: C.white, boxShadow: shadows.xs },
   };
 
   return (
     <button
+      type={type}
+      className="hv-press"
       style={{
         ...BASE,
         ...sizeStyle,
         ...VARIANTS[variant],
-        opacity: disabled ? 0.55 : 1,
+        opacity: disabled ? 0.5 : 1,
         cursor:  disabled ? 'not-allowed' : 'pointer',
         ...sx,
       }}
