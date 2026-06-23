@@ -7,7 +7,11 @@
 
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
+// Normalise the API base so it ALWAYS ends in /api — whether VITE_API_URL is
+// unset ("/api" via the dev proxy), or set to the backend root with or without
+// "/api" (e.g. "https://api.example.com" → "https://api.example.com/api").
+const RAW_BASE = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '');
+const BASE_URL = /\/api$/.test(RAW_BASE) ? RAW_BASE : `${RAW_BASE}/api`;
 const TOKEN_KEY = 'hv_token';
 
 // ── Axios instance ────────────────────────────────────────────────────────────
