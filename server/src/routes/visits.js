@@ -7,17 +7,27 @@ import { writeAudit } from '../lib/audit.js';
 
 const router = Router();
 
+const ReportSchema = z.object({
+  name:       z.string(),
+  url:        z.string().min(1),   // relative path (/api/uploads/file/..) — not a full URL
+  type:       z.string().optional().default('application/octet-stream'),
+  reportType: z.string().optional(),
+});
+
 const CreateVisitSchema = z.object({
   doctorProfileId: z.string().min(1),
   date:            z.string().min(1),
   chiefComplaint:  z.string().min(1),
+  weight:          z.coerce.number().positive().max(1000).optional(),
   diagnosis:       z.string().optional(),
   prescription:    z.string().optional(),
+  testsPrescribed: z.string().optional(),
   notes:           z.string().optional(),
   followUpDate:    z.string().optional(),
+  testReports:     z.array(ReportSchema).optional(),
 });
 
-const UpdateVisitSchema = CreateVisitSchema.omit({ doctorProfileId: true, date: true }).partial();
+const UpdateVisitSchema = CreateVisitSchema.omit({ doctorProfileId: true, date: true, followUpDate: true }).partial();
 
 router.post('/:patientId/visits', authenticateCredential, async (req, res, next) => {
   try {
@@ -29,12 +39,16 @@ router.post('/:patientId/visits', authenticateCredential, async (req, res, next)
     });
     if (!profile) return res.status(404).json({ error: 'Doctor profile not found' });
 
-    // Verify access (READ_WRITE required)
-    const access = await prisma.profileAccess.findUnique({
-      where: { credentialId_doctorProfileId: { credentialId: req.actor.id, doctorProfileId: data.doctorProfileId } },
-    });
-    if (!access) return res.status(403).json({ error: 'You do not have access to this doctor profile' });
-    if (access.permission !== 'READ_WRITE') return res.status(403).json({ error: 'Write access required. Request it from your administrator.' });
+    // Doctors may only write to profiles they hold READ_WRITE on. Receptionists
+    // run the front desk for the whole hospital, so they may record visits for
+    // any profile in their hospital (same rule as walk-in intake).
+    if (req.actor.role === 'DOCTOR') {
+      const access = await prisma.profileAccess.findUnique({
+        where: { credentialId_doctorProfileId: { credentialId: req.actor.id, doctorProfileId: data.doctorProfileId } },
+      });
+      if (!access) return res.status(403).json({ error: 'You do not have access to this doctor profile' });
+      if (access.permission !== 'READ_WRITE') return res.status(403).json({ error: 'Write access required. Request it from your administrator.' });
+    }
 
     const patient = await prisma.patient.findFirst({ where: { id: patientId, hospitalId: req.actor.hospitalId } });
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
@@ -43,13 +57,16 @@ router.post('/:patientId/visits', authenticateCredential, async (req, res, next)
       data: {
         patientId,
         doctorProfileId: data.doctorProfileId,
-        date:           new Date(data.date),
-        chiefComplaint: data.chiefComplaint,
-        diagnosis:      data.diagnosis,
-        prescription:   data.prescription,
-        notes:          data.notes,
-        followUpDate:   data.followUpDate ? new Date(data.followUpDate) : null,
-        createdBy:      req.actor.id,
+        date:            new Date(data.date),
+        chiefComplaint:  data.chiefComplaint,
+        weight:          data.weight ?? null,
+        diagnosis:       data.diagnosis,
+        prescription:    data.prescription,
+        testsPrescribed: data.testsPrescribed,
+        notes:           data.notes,
+        followUpDate:    data.followUpDate ? new Date(data.followUpDate) : null,
+        testReports:     data.testReports ?? [],
+        createdBy:       req.actor.id,
       },
       include: { doctorProfile: { select: { id: true, name: true } } },
     });
@@ -81,11 +98,13 @@ router.patch('/:patientId/visits/:id', authenticateCredential, async (req, res, 
     });
     if (!visit) return res.status(404).json({ error: 'Visit not found' });
 
-    const access = await prisma.profileAccess.findUnique({
-      where: { credentialId_doctorProfileId: { credentialId: req.actor.id, doctorProfileId: visit.doctorProfileId } },
-    });
-    if (!access || access.permission !== 'READ_WRITE') {
-      return res.status(403).json({ error: 'Write access required' });
+    if (req.actor.role === 'DOCTOR') {
+      const access = await prisma.profileAccess.findUnique({
+        where: { credentialId_doctorProfileId: { credentialId: req.actor.id, doctorProfileId: visit.doctorProfileId } },
+      });
+      if (!access || access.permission !== 'READ_WRITE') {
+        return res.status(403).json({ error: 'Write access required' });
+      }
     }
 
     const data = UpdateVisitSchema.parse(req.body);

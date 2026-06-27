@@ -256,6 +256,9 @@ model Patient {
   address           String?
   emergencyContact  String?
   isReturning       Boolean  @default(false)
+  aiSummary         String?   // Latest saved AI clinical summary (markdown text)
+  aiSummaryModel    String?   // Model that produced the saved summary
+  aiSummaryAt       DateTime? // When the summary was saved
   hospitalId        String
   registeredBy      String   // credentialId of the receptionist who registered them
   createdAt         DateTime @default(now())
@@ -280,6 +283,7 @@ model Visit {
   doctorProfileId String
   date            DateTime
   chiefComplaint  String
+  weight          Float?   // Patient weight (kg) recorded at this visit
   examination     String?
   diagnosis       String?
   medications     String?
@@ -385,4 +389,21 @@ model AuditLog {
   @@index([hospitalId, timestamp])
   @@index([credentialId])
   @@index([action])
+}
+
+// Uploaded report file. Records which hospital owns each file so downloads can
+// be permission-checked (a file is only ever accessible to its own hospital).
+// The actual bytes live on disk (gzip-compressed) under `storedName`.
+model Attachment {
+  id         String   @id @default(cuid())
+  hospitalId String                 // owning hospital — enforced on download
+  visitId    String?                // optional link to the visit it belongs to
+  storedName String                 // file on disk (uuid.ext), never exposed to clients
+  fileName   String                 // original file name
+  type       String                 // MIME type
+  reportType String?                // category chosen in the UI (Prescription, …)
+  uploadedBy String                 // credentialId of the uploader
+  createdAt  DateTime @default(now())
+
+  @@index([hospitalId])
 }

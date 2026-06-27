@@ -4,9 +4,9 @@ import { C, shadow } from '../../constants/theme';
 const STATUS_OPTS = ['scheduled', 'completed', 'cancelled'];
 
 const STATUS_STYLE = {
-  scheduled:  { bg: '#E3F2FD', color: '#1565C0' },
-  completed:  { bg: '#E8F5E9', color: '#2E7D32' },
-  cancelled:  { bg: '#FFF5F5', color: '#C62828' },
+  scheduled:  { bg: C.infoSoft,     color: C.info },
+  completed:  { bg: C.successSoft,  color: C.success },
+  cancelled:  { bg: C.criticalSoft, color: C.critical },
 };
 
 const inputStyle = {
@@ -140,6 +140,12 @@ export function AppointmentsView({ actor, appointments, patients, doctorProfiles
 
   const dt = a => new Date(`${a.date}T${a.time || '00:00'}`);
 
+  // Resolve the patient's name. Appointments created via the walk-in intake flow
+  // come back without the patient relation populated, so fall back to the loaded
+  // patients list (always available) instead of showing the literal "Patient".
+  const nameOf = a =>
+    a.patient?.name ?? patients?.find(p => p.id === a.patientId)?.name ?? 'Patient';
+
   const filtered = appointments
     .filter(a => {
       if (tab === 'upcoming')  return a.status === 'scheduled' && dt(a) >= now;
@@ -149,7 +155,7 @@ export function AppointmentsView({ actor, appointments, patients, doctorProfiles
     })
     .filter(a =>
       !search ||
-      a.patient?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      nameOf(a).toLowerCase().includes(search.toLowerCase()) ||
       a.reason?.toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => dt(a) - dt(b));
@@ -217,7 +223,7 @@ export function AppointmentsView({ actor, appointments, patients, doctorProfiles
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                     <p style={{ fontSize: 14, fontWeight: 600, color: C.primary }}>
-                      {appt.patient?.name ?? appt.patientName ?? 'Patient'}
+                      {nameOf(appt)}
                     </p>
                     <StatusBadge status={appt.status} />
                     <span style={{ fontSize: 12, color: C.muted }}>· {appt.reason ?? 'Consultation'}</span>

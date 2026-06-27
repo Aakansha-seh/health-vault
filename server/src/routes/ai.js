@@ -48,13 +48,18 @@ router.get('/models', authenticateCredential, async (req, res, next) => {
 // ─── POST /api/ai/summary ─────────────────────────────────────────────────────
 
 const SummarySchema = z.object({
-  patientId: z.string().min(1),
-  model:     z.string().min(1),
+  patientIds: z.array(z.string().min(1)).min(1).max(10).optional(),
+  patientId:  z.string().min(1).optional(),   // back-compat (single patient)
+  model:      z.string().min(1),
+}).refine((d) => (d.patientIds && d.patientIds.length) || d.patientId, {
+  message: 'Select at least one patient',
 });
 
 router.post('/summary', aiLimiter, authenticateCredential, requireRole('DOCTOR'), async (req, res, next) => {
   try {
-    const { patientId, model } = SummarySchema.parse(req.body);
+    const data = SummarySchema.parse(req.body);
+    const { model } = data;
+    const ids = (data.patientIds && data.patientIds.length) ? data.patientIds : [data.patientId];
 
     // Validate model exists
     if (!AI_MODELS[model]) {
@@ -104,9 +109,9 @@ router.post('/summary', aiLimiter, authenticateCredential, requireRole('DOCTOR')
     });
     const accessibleIds = accesses.map((a) => a.doctorProfileId);
 
-    const patient = await prisma.patient.findFirst({
+    const patients = await prisma.patient.findMany({
       where: {
-        id: patientId,
+        id: { in: ids },
         hospitalId: req.actor.hospitalId,
         OR: [
           { visits:       { some: { doctorProfileId: { in: accessibleIds } } } },
@@ -121,28 +126,29 @@ router.post('/summary', aiLimiter, authenticateCredential, requireRole('DOCTOR')
         },
       },
     });
-    if (!patient) return res.status(404).json({ error: 'Patient not found or you do not have access to it' });
+    if (!patients.length) return res.status(404).json({ error: 'No accessible patients found for this summary' });
 
-    // Call AI
-    const { summary, promptTokens, outputTokens } = await generateSummary({
-      model,
-      patientData: {
-        demographics: {
-          age:               patient.age,
-          gender:            patient.gender,
-          bloodGroup:        patient.bloodGroup,
-          allergies:         patient.allergies,
-          chronicConditions: patient.chronicConditions,
-        },
-        visits: patient.visits,
-      },
+    const demoOf = (p) => ({
+      age:               p.age,
+      gender:            p.gender,
+      bloodGroup:        p.bloodGroup,
+      allergies:         p.allergies,
+      chronicConditions: p.chronicConditions,
     });
 
-    // Log usage
+    // One combined summary when several patients are selected; single otherwise.
+    const patientData = patients.length === 1
+      ? { demographics: demoOf(patients[0]), visits: patients[0].visits }
+      : { patients: patients.map((p) => ({ name: p.name, demographics: demoOf(p), visits: p.visits })) };
+
+    // Call AI
+    const { summary, promptTokens, outputTokens } = await generateSummary({ model, patientData });
+
+    // Log usage (one call regardless of patient count; attribute to the first).
     await prisma.aIUsage.create({
       data: {
         credentialId: req.actor.id,
-        patientId,
+        patientId:    patients[0].id,
         model,
         promptTokens,
         outputTokens,
@@ -151,12 +157,12 @@ router.post('/summary', aiLimiter, authenticateCredential, requireRole('DOCTOR')
 
     await writeAudit({
       actor: req.actor, action: 'AI_SUMMARY_GENERATED',
-      target: { type: 'Patient', id: patientId, label: patient.name },
-      details: `Model: ${model}`,
+      target: { type: 'Patient', id: patients[0].id, label: patients.map((p) => p.name).join(', ') },
+      details: `Model: ${model}${patients.length > 1 ? ` · combined (${patients.length} patients)` : ''}`,
       ipAddress: req.ip,
     });
 
-    res.json({ summary, model, promptTokens, outputTokens });
+    res.json({ summary, model, patientCount: patients.length, promptTokens, outputTokens });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
     // AI provider errors

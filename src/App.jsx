@@ -11,6 +11,7 @@ import {
   grantAccess as apiGrantAccess, revokeAccess as apiRevokeAccess,
   getPermissionRequests, resolvePermissionRequest as apiResolveRequest, requestWriteAccess as apiRequestAccess,
   getAuditLog,
+  saveAISummary as apiSaveAISummary,
 } from './services/api';
 
 import { GlobalStyle, Sidebar, BottomNav } from './components/layout';
@@ -48,7 +49,7 @@ function useIsMobile(breakpoint = 640) {
 
 // Slim top bar shown only on mobile (the sidebar is hidden there) so users keep
 // access to the app identity and sign-out.
-function MobileTopBar({ actor, onLogout }) {
+function MobileTopBar({ actor, onLogout, isDarkMode, onToggleTheme }) {
   const hospitalName = actor?.hospitalName ?? actor?.hospital?.name ?? 'HealthVault';
   return (
     <header style={{
@@ -63,10 +64,113 @@ function MobileTopBar({ actor, onLogout }) {
         </div>
         <span style={{ fontSize: 14, fontWeight: 700, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hospitalName}</span>
       </div>
-      <button onClick={onLogout} aria-label="Sign out" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.muted, display: 'flex', flexShrink: 0, padding: 6 }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button onClick={onToggleTheme} aria-label="Toggle Theme" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.muted, display: 'flex', padding: 6 }}>
+          {isDarkMode ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          )}
+        </button>
+        <button onClick={onLogout} aria-label="Sign out" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.muted, display: 'flex', flexShrink: 0, padding: 6 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
     </header>
+  );
+}
+
+const PALETTE_VIEW_LABELS = {
+  dashboard: 'Dashboard', patients: 'Patients', appointments: 'Appointments',
+  credentials: 'Credentials', profiles: 'Doctor Profiles', permissions: 'Permissions',
+  audit: 'Audit Log', ai: 'AI Summary', subscription: 'Subscription',
+};
+
+function CommandPalette({ isOpen, onClose, patients, setView, onSelectPatient, navViews = [] }) {
+  const [search, setSearch] = useState('');
+  const [selectedIdx, setSelectedIdx] = useState(0);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  // Only offer destinations this role can actually reach.
+  const items = navViews.map(v => ({
+    label: `Go to ${PALETTE_VIEW_LABELS[v] ?? v}`,
+    action: () => setView(v),
+  }));
+
+  // Patient search only makes sense for roles that have the Patients view.
+  const canOpenPatients = navViews.includes('patients');
+  const matchedPatients = (canOpenPatients && search.trim())
+    ? patients.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()))
+    : [];
+
+  const patientItems = matchedPatients.slice(0, 5).map(p => ({
+    label: `Open patient: ${p.name}`,
+    action: () => onSelectPatient(p.id)
+  }));
+
+  const allItems = [...patientItems, ...items];
+  const activeItems = allItems.slice(0, 8);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIdx(i => (i + 1) % activeItems.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIdx(i => (i - 1 + activeItems.length) % activeItems.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeItems[selectedIdx]) {
+        activeItems[selectedIdx].action();
+        onClose();
+      }
+    }
+  };
+
+  return (
+    <div className="hv-command-palette-backdrop" onClick={onClose}>
+      <div 
+        className="hv-command-palette-modal" 
+        onClick={e => e.stopPropagation()}
+      >
+        <input 
+          autoFocus
+          className="hv-command-palette-input"
+          placeholder="Search patients or navigate views (Ctrl+K)..."
+          value={search}
+          onChange={e => { setSearch(e.target.value); setSelectedIdx(0); }}
+          onKeyDown={handleKeyDown}
+        />
+        <div className="hv-command-palette-list">
+          {activeItems.map((item, idx) => (
+            <button
+              key={idx}
+              className={`hv-command-palette-item ${idx === selectedIdx ? 'selected' : ''}`}
+              onClick={() => { item.action(); onClose(); }}
+              onMouseEnter={() => setSelectedIdx(idx)}
+            >
+              <span>{item.label}</span>
+              <span style={{ fontSize: 11, opacity: 0.6 }}>Enter ↵</span>
+            </button>
+          ))}
+          {activeItems.length === 0 && (
+            <div style={{ padding: '16px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
+              No results found
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -93,6 +197,36 @@ export default function App() {
   const [view,         setView]         = useState('dashboard');
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const isMobile = useIsMobile();
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('hv-theme') === 'dark';
+    }
+    return false;
+  });
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [initialPatientId, setInitialPatientId] = useState(null);
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.add('hv-dark-mode');
+      localStorage.setItem('hv-theme', 'dark');
+    } else {
+      document.body.classList.remove('hv-dark-mode');
+      localStorage.setItem('hv-theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setPaletteOpen(open => !open);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Data
   const [patients,        setPatients]        = useState([]);
@@ -301,6 +435,20 @@ export default function App() {
     return apiRequestAccess(data);
   }, []);
 
+  const handleSaveAISummary = useCallback(async (patientId, data) => {
+    const res = await apiSaveAISummary(patientId, data);
+    setPatients(prev => prev.map(p => p.id === patientId
+      ? { ...p, aiSummary: res.aiSummary, aiSummaryModel: res.aiSummaryModel, aiSummaryAt: res.aiSummaryAt }
+      : p));
+    return res;
+  }, []);
+
+  // Must stay above the early returns below — all hooks run on every render.
+  const handleSelectPatientFromPalette = useCallback((id) => {
+    setInitialPatientId(id);
+    setView('patients');
+  }, []);
+
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   if (!splashed) return <><GlobalStyle /><SplashScreen onComplete={() => setSplashed(true)} /></>;
@@ -335,6 +483,8 @@ export default function App() {
     onAddAppointment:     handleAddAppointment,
     onUpdateAppointment:  handleUpdateAppointment,
     onRequestAccess:      handleRequestAccess,
+    initialPatientId,
+    setInitialPatientId,
   };
 
   function renderView() {
@@ -354,7 +504,7 @@ export default function App() {
       case 'dashboard':    return <DoctorDashboard actor={actor} patients={patients} appointments={appointments} doctorProfiles={doctorProfiles} setView={setView} />;
       case 'patients':     return <PatientsView {...shared} />;
       case 'appointments': return <AppointmentsView {...shared} />;
-      case 'ai':           return <AISummaryView actor={actor} patients={patients} doctorProfiles={doctorProfiles} onRequestAccess={handleRequestAccess} />;
+      case 'ai':           return <AISummaryView actor={actor} patients={patients} doctorProfiles={doctorProfiles} onRequestAccess={handleRequestAccess} onSaveSummary={handleSaveAISummary} />;
       case 'subscription': return <SubscriptionView actor={actor} />;
       default:             return <PatientsView {...shared} />;
     }
@@ -373,6 +523,8 @@ export default function App() {
             onLogout={handleLogout}
             isOpen={sidebarOpen}
             onToggle={() => setSidebarOpen(o => !o)}
+            isDarkMode={isDarkMode}
+            onToggleTheme={() => setIsDarkMode(d => !d)}
           />
         )}
         <main style={{
@@ -386,7 +538,14 @@ export default function App() {
           minHeight: '100vh',
           boxSizing: 'border-box',
         }}>
-          {isMobile && <MobileTopBar actor={actor} onLogout={handleLogout} />}
+          {isMobile && (
+            <MobileTopBar 
+              actor={actor} 
+              onLogout={handleLogout} 
+              isDarkMode={isDarkMode} 
+              onToggleTheme={() => setIsDarkMode(d => !d)} 
+            />
+          )}
           <div style={{ padding: isMobile ? '16px 14px' : 0 }}>
             {renderView()}
           </div>
@@ -400,6 +559,14 @@ export default function App() {
           />
         )}
       </div>
+      <CommandPalette
+        isOpen={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        patients={patients}
+        setView={setView}
+        navViews={navViews}
+        onSelectPatient={handleSelectPatientFromPalette}
+      />
     </>
   );
 }

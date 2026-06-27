@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { registerHospital } from '../../services/api';
 import { C, shadow } from '../../constants/theme';
+import { Card, Input, Button } from '../../components/ui';
 
 const STEPS = ['Hospital Info', 'Admin Account', 'Done'];
 
@@ -43,90 +44,199 @@ export function HospitalSetup({ onComplete }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: 480 }}>
+    <div 
+      className="hv-bg-grid" 
+      style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        padding: 24 
+      }}
+    >
+      <div className="hv-fade-up" style={{ width: '100%', maxWidth: 480 }}>
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ 
+              width: 44, 
+              height: 44, 
+              borderRadius: 12, 
+              background: C.primary, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(26,60,52,0.2)' 
+            }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
               </svg>
             </div>
             <span style={{ fontSize: 24, fontWeight: 700, color: C.primary }}>HealthVault</span>
           </div>
-          <p style={{ color: C.muted, fontSize: 14, marginTop: 6 }}>Hospital Setup — Step {step + 1} of {STEPS.length}</p>
+          <p style={{ color: C.muted, fontSize: 14, marginTop: 6, fontWeight: 500 }}>
+            Hospital Setup — Step {step + 1} of {STEPS.length}
+          </p>
         </div>
 
         {/* Progress */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 28 }}>
           {STEPS.map((s, i) => (
-            <div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: i <= step ? C.primary : C.border, transition: 'background 0.3s' }} />
+            <div 
+              key={i} 
+              style={{ 
+                flex: 1, 
+                height: 4, 
+                borderRadius: 2, 
+                background: i <= step ? C.primary : C.border, 
+                transition: 'background 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)' 
+              }} 
+            />
           ))}
         </div>
 
-        <div style={{ background: C.white, borderRadius: 16, boxShadow: '0 4px 24px rgba(0,0,0,0.08)', padding: 32 }}>
-
+        <Card style={{ padding: 32, boxShadow: '0 8px 30px rgba(0,0,0,0.06)', border: `1px solid ${C.border}` }}>
           {step === 2 ? (
-            <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <div style={{ textAlign: 'center', padding: '20px 0' }} className="hv-fade-up">
+              <div style={{ 
+                width: 64, 
+                height: 64, 
+                borderRadius: '50%', 
+                background: C.successSoft, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                margin: '0 auto 20px',
+                border: `1.5px solid ${C.success}30`,
+              }}>
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.success} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
               </div>
-              <h2 style={{ color: C.primary, marginBottom: 8, fontSize: 20 }}>You're all set!</h2>
-              <p style={{ color: C.muted, fontSize: 14, marginBottom: 28 }}>Your hospital account has been created. Sign in with your admin credentials.</p>
-              <button onClick={onComplete} style={btn}>Go to Login →</button>
+              <h2 style={{ color: C.primary, marginBottom: 8, fontSize: 20, fontWeight: 700 }}>You're all set!</h2>
+              <p style={{ color: C.muted, fontSize: 14, marginBottom: 28 }}>
+                Your hospital account has been created. Sign in with your admin credentials.
+              </p>
+              <Button onClick={onComplete} style={{ width: '100%', padding: '12px' }}>
+                Go to Login →
+              </Button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit}>
-              <h3 style={{ color: C.primary, marginBottom: 20, fontSize: 17 }}>{STEPS[step]}</h3>
+            <form onSubmit={handleSubmit} className="hv-fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <h3 style={{ color: C.primary, marginBottom: 4, fontSize: 17, fontWeight: 700 }}>
+                {STEPS[step]}
+              </h3>
 
               {step === 0 && (
-                <>
-                  {field('Hospital Name', form.hospitalName, set('hospitalName'), 'City General Hospital', 'text', true)}
-                  {field('Address', form.hospitalAddress, set('hospitalAddress'), '123 Main St, City', 'text', true)}
-                  {field('Phone', form.hospitalPhone, set('hospitalPhone'), '+91 98765 43210', 'tel', true)}
-                  {field('Hospital Email', form.hospitalEmail, set('hospitalEmail'), 'info@hospital.com', 'email', true)}
-                </>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <Input
+                    label="Hospital Name"
+                    value={form.hospitalName}
+                    onChange={set('hospitalName')}
+                    placeholder="City General Hospital"
+                    required
+                  />
+                  <Input
+                    label="Address"
+                    value={form.hospitalAddress}
+                    onChange={set('hospitalAddress')}
+                    placeholder="123 Main St, City"
+                    required
+                  />
+                  <Input
+                    label="Phone"
+                    type="tel"
+                    value={form.hospitalPhone}
+                    onChange={set('hospitalPhone')}
+                    placeholder="+91 98765 43210"
+                    required
+                  />
+                  <Input
+                    label="Hospital Email"
+                    type="email"
+                    value={form.hospitalEmail}
+                    onChange={set('hospitalEmail')}
+                    placeholder="info@hospital.com"
+                    required
+                  />
+                </div>
               )}
 
               {step === 1 && (
-                <>
-                  {field('Full Name', form.adminName, set('adminName'), 'Dr. Admin Name', 'text', true)}
-                  {field('Admin Email', form.adminEmail, set('adminEmail'), 'admin@hospital.com', 'email', true)}
-                  {field('Password', form.adminPassword, set('adminPassword'), '••••••••', 'password', true)}
-                  {field('Confirm Password', form.adminPasswordConfirm, set('adminPasswordConfirm'), '••••••••', 'password', true)}
-                </>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <Input
+                    label="Full Name"
+                    value={form.adminName}
+                    onChange={set('adminName')}
+                    placeholder="Dr. Admin Name"
+                    required
+                  />
+                  <Input
+                    label="Admin Email"
+                    type="email"
+                    value={form.adminEmail}
+                    onChange={set('adminEmail')}
+                    placeholder="admin@hospital.com"
+                    required
+                  />
+                  <Input
+                    label="Password"
+                    type="password"
+                    value={form.adminPassword}
+                    onChange={set('adminPassword')}
+                    placeholder="••••••••"
+                    required
+                  />
+                  <Input
+                    label="Confirm Password"
+                    type="password"
+                    value={form.adminPasswordConfirm}
+                    onChange={set('adminPasswordConfirm')}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
               )}
 
-              {error && <div style={{ background: '#FFF5F5', border: `1px solid ${C.error}30`, borderRadius: 8, padding: '10px 14px', marginTop: 12, color: C.error, fontSize: 13 }}>{error}</div>}
+              {error && (
+                <div style={{ 
+                  background: C.criticalSoft, 
+                  border: `1px solid ${C.error}20`, 
+                  borderRadius: 8, 
+                  padding: '10px 14px', 
+                  color: C.error, 
+                  fontSize: 13, 
+                  fontWeight: 500,
+                  marginTop: 4 
+                }}>
+                  {error}
+                </div>
+              )}
 
-              <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+              <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
                 {step > 0 && (
-                  <button type="button" onClick={() => setStep(s => s - 1)} style={{ ...btn, background: C.bg, color: C.text, flex: '0 0 auto', width: 100 }}>← Back</button>
+                  <Button 
+                    type="button" 
+                    onClick={() => setStep(s => s - 1)} 
+                    variant="secondary"
+                    style={{ flex: '0 0 auto', width: 100 }}
+                  >
+                    ← Back
+                  </Button>
                 )}
-                <button type="submit" disabled={loading} style={{ ...btn, flex: 1, opacity: loading ? 0.7 : 1 }}>
+                <Button 
+                  type="submit" 
+                  disabled={loading} 
+                  style={{ flex: 1 }}
+                >
                   {loading ? 'Creating…' : step === 1 ? 'Create Account' : 'Next →'}
-                </button>
+                </Button>
               </div>
             </form>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );
 }
-
-function field(label, value, onChange, placeholder, type = 'text', required = false) {
-  return (
-    <div key={label} style={{ marginBottom: 14 }}>
-      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1A3C34', marginBottom: 6 }}>{label}</label>
-      <input type={type} value={value} onChange={onChange} placeholder={placeholder} required={required}
-        style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #E0EDE8', fontSize: 14, color: '#1A3C34', background: '#FFFFFF', outline: 'none', boxSizing: 'border-box' }} />
-    </div>
-  );
-}
-
-const btn = { width: '100%', padding: 13, borderRadius: 10, border: 'none', cursor: 'pointer', background: '#1A3C34', color: '#FFFFFF', fontSize: 15, fontWeight: 700 };

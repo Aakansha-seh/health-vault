@@ -1,87 +1,57 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { C } from '../../constants/theme';
-import { getUploadConfig, uploadReportFile } from '../../services/api';
+import { ReportUploader } from '../../components/ui/ReportUploader';
+import { Input, Button, Select } from '../../components/ui';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
-const inputStyle = {
-  width: '100%', padding: '9px 12px', borderRadius: 8, border: `1.5px solid ${C.border}`,
-  fontSize: 14, color: C.text, background: C.white, boxSizing: 'border-box',
-};
-const btnPrimary = {
-  padding: '10px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: C.primary, color: C.white, fontSize: 14, fontWeight: 600,
-};
-
-function Field({ label, required, children, full }) {
-  return (
-    <div style={{ marginBottom: 14, ...(full ? { gridColumn: '1/-1' } : {}) }}>
-      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.primary, marginBottom: 5 }}>
-        {label}{required && <span style={{ color: C.error }}> *</span>}
-      </label>
-      {children}
-    </div>
-  );
-}
-
 function SectionTitle({ children }) {
   return (
-    <p style={{ gridColumn: '1/-1', fontSize: 12, fontWeight: 700, color: C.secondary, textTransform: 'uppercase', letterSpacing: 0.6, margin: '8px 0 2px' }}>
+    <p style={{ gridColumn: '1/-1', fontSize: 11, fontWeight: 700, color: C.secondary, textTransform: 'uppercase', letterSpacing: 0.6, margin: '8px 0 6px' }}>
       {children}
     </p>
   );
 }
 
-/**
- * PatientIntakeForm — front-desk walk-in intake. One submit creates the patient,
- * their first clinical visit, and (optionally) the next appointment.
- *
- * onSave(payload) should call the /patients/intake endpoint.
- */
+const STEPS = ['Demographics', 'Consultation', 'Schedule & Reports'];
+
 export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
+  const [step, setStep] = useState(0);
   const [form, setForm] = useState({
-    name: '', phone: '', gender: '', age: '', bloodGroup: '', allergies: '', address: '',
+    name: '', phone: '', gender: '', age: '', weight: '', bloodGroup: '', allergies: '', address: '',
     doctorProfileId: doctorProfiles[0]?.id ?? '',
     symptoms: '', diagnosis: '', prescription: '', testsPrescribed: '', notes: '',
     appointmentDate: '', appointmentTime: '', appointmentReason: 'Follow-up',
   });
-  const [reports, setReports]   = useState([]);     // [{ name, url, type }]
-  const [uploads, setUploads]   = useState({ busy: false, error: '' });
-  const [uploadOn, setUploadOn] = useState(false);  // Azure configured?
-  const [loading, setLoading]   = useState(false);
-  const [error,   setError]     = useState('');
-  const fileRef = useRef(null);
+  const [reports, setReports] = useState([]);   // [{ name, url, type, reportType }]
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  useEffect(() => {
-    getUploadConfig().then(r => setUploadOn(!!r.configured)).catch(() => setUploadOn(false));
-  }, []);
-
-  const handleFiles = async (e) => {
-    const files = Array.from(e.target.files ?? []);
-    if (!files.length) return;
-    setUploads({ busy: true, error: '' });
-    try {
-      for (const file of files) {
-        const meta = await uploadReportFile(file);
-        setReports(prev => [...prev, meta]);
-      }
-    } catch (err) {
-      setUploads(u => ({ ...u, error: err.message || 'Upload failed' }));
-    } finally {
-      setUploads(u => ({ ...u, busy: false }));
-      if (fileRef.current) fileRef.current.value = '';
+  const handleNext = () => {
+    setError('');
+    if (step === 0) {
+      if (!form.name.trim()) { setError('Patient name is required'); return; }
+    } else if (step === 1) {
+      if (!form.doctorProfileId) { setError('Select an assigned doctor'); return; }
+      if (!form.symptoms.trim()) { setError('Chief complaint/symptoms are required'); return; }
     }
+    setStep(s => s + 1);
   };
 
-  const removeReport = (url) => setReports(prev => prev.filter(r => r.url !== url));
+  const handleBack = () => {
+    setError('');
+    setStep(s => s - 1);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim())          { setError('Patient name is required'); return; }
-    if (!form.doctorProfileId)      { setError('Select a doctor'); return; }
-    if (!form.symptoms.trim())      { setError('Symptoms are required'); return; }
+    if (step < 2) {
+      handleNext();
+      return;
+    }
+
     if (form.appointmentDate && !form.appointmentTime) { setError('Pick a time for the next appointment'); return; }
     if (form.appointmentTime && !form.appointmentDate) { setError('Pick a date for the next appointment'); return; }
 
@@ -91,6 +61,7 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
       phone: form.phone.trim() || undefined,
       gender: form.gender || undefined,
       age: form.age ? Number(form.age) : undefined,
+      weight: form.weight ? Number(form.weight) : undefined,
       bloodGroup: form.bloodGroup || undefined,
       allergies: form.allergies.trim() || undefined,
       address: form.address.trim() || undefined,
@@ -117,104 +88,136 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
   const noDoctors = doctorProfiles.length === 0;
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-
-        <SectionTitle>Patient</SectionTitle>
-        <Field label="Full Name" required full>
-          <input style={inputStyle} value={form.name} onChange={set('name')} placeholder="Patient full name" required />
-        </Field>
-        <Field label="Phone Number">
-          <input style={inputStyle} value={form.phone} onChange={set('phone')} placeholder="+91 98765 43210" />
-        </Field>
-        <Field label="Age">
-          <input style={inputStyle} type="number" min="0" max="150" value={form.age} onChange={set('age')} placeholder="e.g. 34" />
-        </Field>
-        <Field label="Gender">
-          <select style={inputStyle} value={form.gender} onChange={set('gender')}>
-            <option value="">Select</option>
-            <option>Male</option><option>Female</option><option>Other</option>
-          </select>
-        </Field>
-        <Field label="Blood Group">
-          <select style={inputStyle} value={form.bloodGroup} onChange={set('bloodGroup')}>
-            <option value="">Unknown</option>
-            {BLOOD_GROUPS.map(b => <option key={b}>{b}</option>)}
-          </select>
-        </Field>
-        <Field label="Known Allergies" full>
-          <input style={inputStyle} value={form.allergies} onChange={set('allergies')} placeholder="Penicillin, dust… (leave blank if none)" />
-        </Field>
-        <Field label="Address" full>
-          <input style={inputStyle} value={form.address} onChange={set('address')} placeholder="Full address" />
-        </Field>
-
-        <SectionTitle>Consultation</SectionTitle>
-        <Field label="Assign Doctor" required full>
-          <select style={inputStyle} value={form.doctorProfileId} onChange={set('doctorProfileId')} required>
-            <option value="">{noDoctors ? 'No doctor profiles available' : 'Select doctor…'}</option>
-            {doctorProfiles.map(p => <option key={p.id} value={p.id}>{p.name} — {p.specialty ?? 'General'}</option>)}
-          </select>
-        </Field>
-        <Field label="Symptoms / Chief Complaint" required full>
-          <textarea style={{ ...inputStyle, minHeight: 64, resize: 'vertical' }} value={form.symptoms} onChange={set('symptoms')} placeholder="Fever, cough for 3 days…" required />
-        </Field>
-        <Field label="Diagnosis">
-          <input style={inputStyle} value={form.diagnosis} onChange={set('diagnosis')} placeholder="Provisional diagnosis" />
-        </Field>
-        <Field label="Tests Prescribed">
-          <input style={inputStyle} value={form.testsPrescribed} onChange={set('testsPrescribed')} placeholder="CBC, X-ray chest…" />
-        </Field>
-        <Field label="Prescription" full>
-          <textarea style={{ ...inputStyle, minHeight: 64, resize: 'vertical' }} value={form.prescription} onChange={set('prescription')} placeholder="Medication, dosage, duration…" />
-        </Field>
-        <Field label="Notes" full>
-          <textarea style={{ ...inputStyle, minHeight: 48, resize: 'vertical' }} value={form.notes} onChange={set('notes')} placeholder="Any extra observations…" />
-        </Field>
-
-        <SectionTitle>Reports {uploadOn ? '' : '(uploads not configured)'}</SectionTitle>
-        <div style={{ gridColumn: '1/-1', marginBottom: 14 }}>
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            disabled={!uploadOn || uploads.busy}
-            onChange={handleFiles}
-            style={{ fontSize: 13, color: C.text }}
-          />
-          {uploads.busy && <p style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Uploading…</p>}
-          {uploads.error && <p style={{ fontSize: 12, color: C.error, marginTop: 6 }}>{uploads.error}</p>}
-          {!uploadOn && <p style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Add an Azure connection string on the server to enable report uploads.</p>}
-          {reports.length > 0 && (
-            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {reports.map(r => (
-                <div key={r.url} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.bg, borderRadius: 8, padding: '6px 10px' }}>
-                  <a href={r.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.secondary, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</a>
-                  <button type="button" onClick={() => removeReport(r.url)} style={{ background: 'none', border: 'none', color: C.error, cursor: 'pointer', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>Remove</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <SectionTitle>Next Appointment (optional)</SectionTitle>
-        <Field label="Date">
-          <input style={inputStyle} type="date" value={form.appointmentDate} onChange={set('appointmentDate')} />
-        </Field>
-        <Field label="Time">
-          <input style={inputStyle} type="time" value={form.appointmentTime} onChange={set('appointmentTime')} />
-        </Field>
-        <Field label="Reason" full>
-          <input style={inputStyle} value={form.appointmentReason} onChange={set('appointmentReason')} placeholder="Follow-up, report review…" />
-        </Field>
+    <form onSubmit={handleSubmit} className="hv-fade-up">
+      {/* Steps indicator */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+        {STEPS.map((s, i) => (
+          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ 
+              height: 4, 
+              borderRadius: 2, 
+              background: i <= step ? C.primary : C.border, 
+              transition: 'background 0.3s cubic-bezier(0.4, 0, 0.2, 1)' 
+            }} />
+            <span style={{ 
+              fontSize: 10, 
+              fontWeight: 600, 
+              color: i <= step ? C.primary : C.muted,
+              textAlign: 'center',
+              transition: 'color 0.3s ease'
+            }}>
+              {s}
+            </span>
+          </div>
+        ))}
       </div>
 
-      {error && <p style={{ color: C.error, fontSize: 13, marginBottom: 10 }}>{error}</p>}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onClose} style={{ ...btnPrimary, background: C.bg, color: C.text }}>Cancel</button>
-        <button type="submit" disabled={loading || uploads.busy} style={{ ...btnPrimary, opacity: (loading || uploads.busy) ? 0.7 : 1 }}>
-          {loading ? 'Saving…' : 'Register Patient'}
-        </button>
+      <div style={{ minHeight: '340px' }}>
+        {step === 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px' }} className="hv-fade-up">
+            <SectionTitle>Patient Information</SectionTitle>
+            <div style={{ gridColumn: '1/-1' }}>
+              <Input label="Full Name *" value={form.name} onChange={set('name')} placeholder="Patient full name" required />
+            </div>
+            <Input label="Phone Number" value={form.phone} onChange={set('phone')} placeholder="+91 98765 43210" />
+            <Input label="Age" type="number" value={form.age} onChange={set('age')} placeholder="e.g. 34" numeric />
+            
+            <Select 
+              label="Gender" 
+              value={form.gender} 
+              onChange={set('gender')}
+              options={[
+                { value: '', label: 'Select' },
+                { value: 'Male', label: 'Male' },
+                { value: 'Female', label: 'Female' },
+                { value: 'Other', label: 'Other' }
+              ]}
+            />
+            
+            <Select 
+              label="Blood Group" 
+              value={form.bloodGroup} 
+              onChange={set('bloodGroup')}
+              options={[
+                { value: '', label: 'Unknown' },
+                ...BLOOD_GROUPS.map(bg => ({ value: bg, label: bg }))
+              ]}
+            />
+
+            <div style={{ gridColumn: '1/-1' }}>
+              <Input label="Known Allergies" value={form.allergies} onChange={set('allergies')} placeholder="Penicillin, dust… (leave blank if none)" />
+            </div>
+            <div style={{ gridColumn: '1/-1' }}>
+              <Input label="Address" value={form.address} onChange={set('address')} placeholder="Full address" />
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px' }} className="hv-fade-up">
+            <SectionTitle>Consultation Details</SectionTitle>
+            <div style={{ gridColumn: '1/-1' }}>
+              <Select 
+                label="Assign Doctor *" 
+                value={form.doctorProfileId} 
+                onChange={set('doctorProfileId')}
+                required
+                options={[
+                  { value: '', label: noDoctors ? 'No doctor profiles available' : 'Select doctor…' },
+                  ...doctorProfiles.map(p => ({ value: p.id, label: `${p.name} — ${p.specialty ?? 'General'}` }))
+                ]}
+              />
+            </div>
+            <div style={{ gridColumn: '1/-1' }}>
+              <Input label="Symptoms / Chief Complaint *" multiline rows={3} value={form.symptoms} onChange={set('symptoms')} placeholder="Fever, cough for 3 days…" required />
+            </div>
+            <Input label="Weight (kg)" type="number" value={form.weight} onChange={set('weight')} placeholder="e.g. 72.5" numeric />
+            <Input label="Diagnosis" value={form.diagnosis} onChange={set('diagnosis')} placeholder="Provisional diagnosis" />
+            <div style={{ gridColumn: '1/-1' }}>
+              <Input label="Tests Prescribed" value={form.testsPrescribed} onChange={set('testsPrescribed')} placeholder="CBC, X-ray chest…" />
+            </div>
+            <div style={{ gridColumn: '1/-1' }}>
+              <Input label="Prescription" multiline rows={3} value={form.prescription} onChange={set('prescription')} placeholder="Medication, dosage, duration…" />
+            </div>
+            <div style={{ gridColumn: '1/-1' }}>
+              <Input label="Notes" multiline rows={2} value={form.notes} onChange={set('notes')} placeholder="Any extra observations…" />
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px' }} className="hv-fade-up">
+            <SectionTitle>Reports & Attachments</SectionTitle>
+            <div style={{ gridColumn: '1/-1', marginBottom: 8 }}>
+              <ReportUploader reports={reports} setReports={setReports} />
+            </div>
+
+            <SectionTitle>Next Appointment (optional)</SectionTitle>
+            <Input label="Date" type="date" value={form.appointmentDate} onChange={set('appointmentDate')} />
+            <Input label="Time" type="time" value={form.appointmentTime} onChange={set('appointmentTime')} />
+            <div style={{ gridColumn: '1/-1' }}>
+              <Input label="Reason" value={form.appointmentReason} onChange={set('appointmentReason')} placeholder="Follow-up, report review…" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {error && <p style={{ color: C.error, fontSize: 13, marginTop: 16, fontWeight: 500 }}>{error}</p>}
+      
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
+        {step > 0 ? (
+          <Button type="button" onClick={handleBack} variant="secondary">Back</Button>
+        ) : (
+          <Button type="button" onClick={onClose} variant="ghost">Cancel</Button>
+        )}
+        
+        {step < 2 ? (
+          <Button type="button" onClick={handleNext}>Next</Button>
+        ) : (
+          <Button type="submit" disabled={loading}>
+            {loading ? 'Saving…' : 'Register Patient'}
+          </Button>
+        )}
       </div>
     </form>
   );

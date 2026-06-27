@@ -49,7 +49,7 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));  // 25mb so base64-encoded report uploads fit
 app.set('trust proxy', 1);
 
 // Global rate limiter

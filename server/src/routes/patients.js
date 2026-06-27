@@ -136,9 +136,10 @@ router.post('/', authenticateCredential, async (req, res, next) => {
 // to the same hospital. Report files are uploaded to Azure first, then their
 // blob URLs are passed here in `testReports`.
 const ReportSchema = z.object({
-  name: z.string(),
-  url:  z.string().url(),
-  type: z.string().optional().default('application/octet-stream'),
+  name:       z.string(),
+  url:        z.string().min(1),   // relative path (/api/uploads/file/..) — not a full URL
+  type:       z.string().optional().default('application/octet-stream'),
+  reportType: z.string().optional(),
 });
 
 const IntakeSchema = z.object({
@@ -147,6 +148,7 @@ const IntakeSchema = z.object({
   phone:           z.string().optional(),
   gender:          z.enum(['Male', 'Female', 'Other']).optional().or(z.literal('')),
   age:             z.coerce.number().int().positive().max(150).optional(),
+  weight:          z.coerce.number().positive().max(1000).optional(),
   bloodGroup:      z.string().optional(),
   allergies:       z.string().optional(),
   address:         z.string().optional(),
@@ -198,6 +200,7 @@ router.post('/intake', authenticateCredential, async (req, res, next) => {
           doctorProfileId: data.doctorProfileId,
           date:            new Date(),
           chiefComplaint:  data.symptoms,
+          weight:          data.weight ?? null,
           diagnosis:       data.diagnosis || null,
           prescription:    data.prescription || null,
           testsPrescribed: data.testsPrescribed || null,
@@ -298,6 +301,48 @@ router.patch('/:id', authenticateCredential, async (req, res, next) => {
       target: { type: 'Patient', id: patient.id, label: patient.name },
       ipAddress: req.ip,
     });
+    res.json(updated);
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
+    next(err);
+  }
+});
+
+// ─── POST /api/patients/:id/ai-summary — save a generated AI summary onto the
+// patient's record (latest-only; overwrites any previous saved summary). ──────
+const SaveAISummarySchema = z.object({
+  summary: z.string().min(1),
+  model:   z.string().optional(),
+});
+
+router.post('/:id/ai-summary', authenticateCredential, async (req, res, next) => {
+  try {
+    const where = { id: req.params.id, hospitalId: req.actor.hospitalId };
+    // Doctors may only save to patients linked to a profile they can access.
+    if (isRestrictedDoctor(req.actor)) {
+      const ids = await accessibleProfileIds(req.actor);
+      where.OR = [
+        { visits:       { some: { doctorProfileId: { in: ids } } } },
+        { appointments: { some: { doctorProfileId: { in: ids } } } },
+      ];
+    }
+    const patient = await prisma.patient.findFirst({ where, select: { id: true, name: true } });
+    if (!patient) return res.status(404).json({ error: 'Patient not found or you do not have access to it' });
+
+    const { summary, model } = SaveAISummarySchema.parse(req.body);
+    const updated = await prisma.patient.update({
+      where: { id: patient.id },
+      data:  { aiSummary: summary, aiSummaryModel: model || null, aiSummaryAt: new Date() },
+      select: { id: true, aiSummary: true, aiSummaryModel: true, aiSummaryAt: true },
+    });
+
+    await writeAudit({
+      actor: req.actor, action: 'AI_SUMMARY_GENERATED',
+      target: { type: 'Patient', id: patient.id, label: patient.name },
+      details: `AI summary saved to record${model ? ` (${model})` : ''}`,
+      ipAddress: req.ip,
+    });
+
     res.json(updated);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });

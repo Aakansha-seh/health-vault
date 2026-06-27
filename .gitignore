@@ -1,6 +1,7 @@
 # ─── Secrets / environment (NEVER commit) ────────────────────────────────────
 # Contains DB password, JWT secret, AI provider keys, Razorpay keys,
 # Azure Storage connection string, etc.
+
 .env
 .env.*
 **/.env
@@ -45,6 +46,10 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 
+# ─── Uploaded report files (stored on the server's disk) ─────────────────────
+uploads/
+**/uploads/
+
 # ─── Editor / OS cruft ────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
@@ -55,3 +60,5 @@ Thumbs.db
 # ─── Project docs intentionally kept private ──────────────────────────────────
 CLAUDE.md
 FUTURE_IDEAS.md
+HEALTHVAULT_EXPLAINED.md
+PRODUCTION_READINESS.md

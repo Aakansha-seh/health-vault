@@ -14,52 +14,51 @@
 
 // ── Neutral gray ramp ─────────────────────────────────────────────────────────
 export const gray = {
-  50:  '#F7F8F9',  // app canvas
-  100: '#F1F3F4',  // subtle fill / table header
-  200: '#E6E8EB',  // hairline border
-  300: '#D5D9DD',  // strong border / divider
-  400: '#A8AFB6',  // faint text / disabled
-  500: '#7C858D',  // muted / secondary text
-  600: '#5B636B',
-  700: '#3E454C',
-  800: '#272B30',
-  900: '#1A1D21',  // primary ink
+  50:  'var(--hv-gray-50, #F7F8F9)',  // app canvas
+  100: 'var(--hv-gray-100, #F1F3F4)',  // subtle fill / table header
+  200: 'var(--hv-gray-200, #E6E8EB)',  // hairline border
+  300: 'var(--hv-gray-300, #D5D9DD)',  // strong border / divider
+  400: 'var(--hv-gray-400, #A8AFB6)',  // faint text / disabled
+  500: 'var(--hv-gray-500, #7C858D)',  // muted / secondary text
+  600: 'var(--hv-gray-600, #5B636B)',
+  700: 'var(--hv-gray-700, #3E454C)',
+  800: 'var(--hv-gray-800, #272B30)',
+  900: 'var(--hv-gray-900, #1A1D21)',  // primary ink
 };
 
 export const C = {
   // ── Brand (the single accent: primary actions, focus, key links) ──
-  primary:      '#1A3C34',  // brand green — primary buttons / actions
-  primaryHover: '#15302A',
-  brand:        '#1A3C34',
-  secondary:    '#3F6B58',  // deeper sage — accent text / links / focus ring
-                            //   (darker than the old #5A8A72 for AA contrast on white)
+  primary:      'var(--hv-primary, #1A3C34)',  // brand green — primary buttons / actions
+  primaryHover: 'var(--hv-primary-hover, #15302A)',
+  brand:        'var(--hv-brand, #1A3C34)',
+  secondary:    'var(--hv-secondary, #3F6B58)',  // deeper sage
 
   // ── Neutral canvas / surfaces ──
-  bg:           '#F7F8F9',  // app canvas (was mint #F0F7F4)
-  surface:      '#FFFFFF',
-  white:        '#FFFFFF',
-  border:       '#E6E8EB',  // neutral hairline (was greenish #E0EDE8)
-  borderStrong: '#D5D9DD',
+  bg:           'var(--hv-bg, #F7F8F9)',  // app canvas
+  surface:      'var(--hv-surface, #FFFFFF)',
+  white:        'var(--hv-white, #FFFFFF)',
+  border:       'var(--hv-border, #E6E8EB)',  // neutral hairline
+  borderStrong: 'var(--hv-border-strong, #D5D9DD)',
 
   // ── Text (neutral slate — NOT green) ──
-  ink:          '#1A1D21',  // primary text
-  text:         '#1A1D21',  // was green #1A3C34 → now neutral
-  muted:        '#7C858D',  // secondary text (was greenish #8AA89E)
-  faint:        '#A8AFB6',  // tertiary / disabled
+  ink:          'var(--hv-ink, #1A1D21)',  // primary text
+  text:         'var(--hv-text, #1A1D21)',
+  muted:        'var(--hv-muted, #7C858D)',  // secondary text
+  faint:        'var(--hv-faint, #A8AFB6)',  // tertiary / disabled
 
   // ── Clinical status — RESERVED. Do not use decoratively. ──
-  critical:     '#DC2626',  // red — critical / destructive
-  error:        '#DC2626',
-  warning:      '#D97706',  // amber — caution
-  amber:        '#D97706',
-  success:      '#16A34A',  // green — ok / done (kept distinct from brand green)
-  info:         '#2563EB',  // blue — informational
+  critical:     'var(--hv-critical, #DC2626)',  // red — critical / destructive
+  error:        'var(--hv-error, #DC2626)',
+  warning:      'var(--hv-warning, #D97706)',  // amber — caution
+  amber:        'var(--hv-amber, #D97706)',
+  success:      'var(--hv-success, #16A34A)',  // green — ok / done
+  info:         'var(--hv-info, #2563EB)',  // blue — informational
 
   // ── Soft status fills (badges / banners) ──
-  criticalSoft: '#FEF2F2',
-  warningSoft:  '#FFFBEB',
-  successSoft:  '#F0FDF4',
-  infoSoft:     '#EFF6FF',
+  criticalSoft: 'var(--hv-critical-soft, #FEF2F2)',
+  warningSoft:  'var(--hv-warning-soft, #FFFBEB)',
+  successSoft:  'var(--hv-success-soft, #F0FDF4)',
+  infoSoft:     'var(--hv-info-soft, #EFF6FF)',
 
   // Expose the ramp for fine-grained use.
   gray,

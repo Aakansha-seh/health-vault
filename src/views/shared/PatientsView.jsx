@@ -1,8 +1,90 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { C, shadow } from '../../constants/theme';
 import { PatientIntakeForm } from './PatientIntakeForm';
+import { ReportUploader, openReportFile } from '../../components/ui/ReportUploader';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+
+function renderTextWithVitals(text) {
+  if (!text) return '';
+
+  const regex = /(BP|Blood\s+Pressure)[\s:]*(\d{2,3})\s*\/\s*(\d{2,3})|(SpO2)[\s:]*(\d{2,3})%?|(HR|Pulse)[\s:]*(\d{2,3})\s*(bpm)?|(Temp|Temperature)[\s:]*(\d{2,3}(?:\.\d)?)\s*(F|C)?/gi;
+
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+
+    const matchedText = match[0];
+
+    if (match[1]) {
+      const sys = parseInt(match[2], 10);
+      const dia = parseInt(match[3], 10);
+      let badgeType = 'stable';
+      if (sys >= 140 || dia >= 90) badgeType = 'critical';
+      else if (sys >= 120 || dia >= 80) badgeType = 'warning';
+
+      parts.push(
+        <span key={match.index} className={`hv-vital-badge-${badgeType}`} title={`BP Level: ${badgeType.toUpperCase()}`}>
+          {matchedText}
+        </span>
+      );
+    }
+    else if (match[4]) {
+      const spo2 = parseInt(match[5], 10);
+      let badgeType = 'stable';
+      if (spo2 < 92) badgeType = 'critical';
+      else if (spo2 < 95) badgeType = 'warning';
+
+      parts.push(
+        <span key={match.index} className={`hv-vital-badge-${badgeType}`} title={`SpO2 Level: ${badgeType.toUpperCase()}`}>
+          {matchedText}
+        </span>
+      );
+    }
+    else if (match[6]) {
+      const hr = parseInt(match[7], 10);
+      let badgeType = 'stable';
+      if (hr > 105 || hr < 50) badgeType = 'critical';
+      else if (hr > 95 || hr < 60) badgeType = 'warning';
+
+      parts.push(
+        <span key={match.index} className={`hv-vital-badge-${badgeType}`} title={`HR Level: ${badgeType.toUpperCase()}`}>
+          {matchedText}
+        </span>
+      );
+    }
+    else if (match[9]) {
+      const temp = parseFloat(match[10]);
+      const unit = (match[11] || 'F').toUpperCase();
+      let isFever = false;
+      if (unit === 'C') {
+        isFever = temp >= 38.0;
+      } else {
+        isFever = temp >= 100.4;
+      }
+      const badgeType = isFever ? 'critical' : 'stable';
+
+      parts.push(
+        <span key={match.index} className={`hv-vital-badge-${badgeType}`} title={`Temp Level: ${badgeType.toUpperCase()}`}>
+          {matchedText}
+        </span>
+      );
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
 
 const inputStyle = {
   width: '100%', padding: '9px 12px', borderRadius: 8, border: `1.5px solid ${C.border}`,
@@ -120,8 +202,9 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose }) {
   const [form, setForm] = useState({
     doctorProfileId: doctorProfiles?.[0]?.id ?? '',
     date: new Date().toISOString().split('T')[0],
-    chiefComplaint: '', diagnosis: '', prescription: '', notes: '', followUpDate: '',
+    chiefComplaint: '', diagnosis: '', prescription: '', testsPrescribed: '', notes: '', followUpDate: '', weight: '',
   });
+  const [reports, setReports] = useState([]);   // [{ name, url, type, reportType }]
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -130,7 +213,19 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose }) {
     e.preventDefault();
     if (!form.doctorProfileId) { setError('Select a doctor profile'); return; }
     setLoading(true); setError('');
-    try { await onSave(form); onClose(); }
+    const payload = {
+      doctorProfileId: form.doctorProfileId,
+      date:            form.date,
+      chiefComplaint:  form.chiefComplaint,
+      diagnosis:       form.diagnosis || undefined,
+      prescription:    form.prescription || undefined,
+      testsPrescribed: form.testsPrescribed || undefined,
+      notes:           form.notes || undefined,
+      followUpDate:    form.followUpDate || undefined,
+      weight:          form.weight ? Number(form.weight) : undefined,
+      testReports:     reports.length ? reports : undefined,
+    };
+    try { await onSave(payload); onClose(); }
     catch (err) { setError(err.message); setLoading(false); }
   };
 
@@ -150,6 +245,9 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose }) {
         <Field label="Follow-up Date">
           <input style={inputStyle} type="date" value={form.followUpDate} onChange={set('followUpDate')} />
         </Field>
+        <Field label="Weight (kg)">
+          <input style={inputStyle} type="number" min="0" step="0.1" value={form.weight} onChange={set('weight')} placeholder="e.g. 72.5" />
+        </Field>
       </div>
       <Field label="Chief Complaint *">
         <input style={inputStyle} value={form.chiefComplaint} onChange={set('chiefComplaint')} placeholder="Fever, headache, etc." required />
@@ -157,11 +255,17 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose }) {
       <Field label="Diagnosis">
         <input style={inputStyle} value={form.diagnosis} onChange={set('diagnosis')} placeholder="ICD-10 code or description" />
       </Field>
+      <Field label="Tests Prescribed">
+        <input style={inputStyle} value={form.testsPrescribed} onChange={set('testsPrescribed')} placeholder="CBC, X-ray chest…" />
+      </Field>
       <Field label="Prescription">
         <textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} value={form.prescription} onChange={set('prescription')} placeholder="Medications, dosage…" />
       </Field>
       <Field label="Notes">
         <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} value={form.notes} onChange={set('notes')} placeholder="Additional observations…" />
+      </Field>
+      <Field label="Reports">
+        <ReportUploader reports={reports} setReports={setReports} />
       </Field>
       {error && <p style={{ color: C.error, fontSize: 13, marginBottom: 10 }}>{error}</p>}
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -255,13 +359,13 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-        {['visits', 'info'].map(t => (
+        {['visits', 'info', ...(patient.aiSummary ? ['ai'] : [])].map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
             background: tab === t ? C.primary : C.bg,
             color: tab === t ? C.white : C.muted, fontSize: 13, fontWeight: tab === t ? 600 : 400,
           }}>
-            {t === 'visits' ? `Visits (${patient.visits?.length ?? 0})` : 'Info'}
+            {t === 'visits' ? `Visits (${patient.visits?.length ?? 0})` : t === 'ai' ? 'AI Summary' : 'Info'}
           </button>
         ))}
       </div>
@@ -278,24 +382,40 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
                 </span>
                 {v.doctorProfile?.name && <span style={{ fontSize: 12, color: C.secondary }}>{v.doctorProfile.name}</span>}
               </div>
-              {v.chiefComplaint  && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Complaint:</strong> {v.chiefComplaint}</p>}
-              {v.diagnosis       && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Diagnosis:</strong> {v.diagnosis}</p>}
-              {v.prescription    && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Rx:</strong> {v.prescription}</p>}
-              {v.testsPrescribed && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Tests:</strong> {v.testsPrescribed}</p>}
+              {v.chiefComplaint  && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Complaint:</strong> {renderTextWithVitals(v.chiefComplaint)}</p>}
+              {(v.weight || v.weight === 0) && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Weight:</strong> {v.weight} kg</p>}
+              {v.diagnosis       && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Diagnosis:</strong> {renderTextWithVitals(v.diagnosis)}</p>}
+              {v.prescription    && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Rx:</strong> {renderTextWithVitals(v.prescription)}</p>}
+              {v.testsPrescribed && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Tests:</strong> {renderTextWithVitals(v.testsPrescribed)}</p>}
               {Array.isArray(v.testReports) && v.testReports.length > 0 && (
                 <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}>
                   <strong>Reports:</strong>{' '}
                   {v.testReports.map((r, i) => (
-                    <span key={r.url ?? i}>
+                    <span key={r.fileId ?? r.url ?? i}>
                       {i > 0 && ', '}
-                      <a href={r.url} target="_blank" rel="noreferrer" style={{ color: C.secondary }}>{r.name ?? `Report ${i + 1}`}</a>
+                      <a onClick={() => openReportFile(r)} style={{ color: C.secondary, cursor: 'pointer' }}>{r.reportType ?? r.name ?? `Report ${i + 1}`}</a>
                     </span>
                   ))}
                 </p>
               )}
-              {v.notes           && <p style={{ fontSize: 12, color: C.muted }}>{v.notes}</p>}
+              {v.notes           && <p style={{ fontSize: 12, color: C.muted }}>{renderTextWithVitals(v.notes)}</p>}
             </div>
           ))}
+        </div>
+      )}
+
+      {tab === 'ai' && patient.aiSummary && (
+        <div>
+          <p style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
+            {patient.aiSummaryModel ? `Generated with ${patient.aiSummaryModel}` : 'Saved AI summary'}
+            {patient.aiSummaryAt && ` · ${new Date(patient.aiSummaryAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+          </p>
+          <div style={{ background: C.bg, borderRadius: 8, padding: '14px 16px', maxHeight: 460, overflowY: 'auto', fontSize: 13, color: C.text, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+            {patient.aiSummary.replace(/\*\*/g, '')}
+          </div>
+          <p style={{ fontSize: 11, color: C.muted, marginTop: 10, fontStyle: 'italic' }}>
+            AI-generated decision support. The treating clinician is responsible for all clinical decisions.
+          </p>
         </div>
       )}
 
@@ -329,11 +449,19 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
 
 // ── Main View ─────────────────────────────────────────────────────────────────
 
-export function PatientsView({ actor, patients, doctorProfiles, onAddPatient, onIntake, onUpdatePatient, onAddVisit, onRequestAccess }) {
+export function PatientsView({ actor, patients, doctorProfiles, onAddPatient, onIntake, onUpdatePatient, onAddVisit, onRequestAccess, initialPatientId, setInitialPatientId }) {
   const [search,    setSearch]    = useState('');
   const [showAdd,   setShowAdd]   = useState(false);
   const [selected,  setSelected]  = useState(null);
   const [serverSearch, setServerSearch] = useState('');
+
+  useEffect(() => {
+    if (initialPatientId) {
+      const p = patients.find(x => x.id === initialPatientId);
+      if (p) setSelected(p);
+      setInitialPatientId(null);
+    }
+  }, [initialPatientId, patients, setInitialPatientId]);
 
   // Admins/receptionists may write hospital-wide. A DOCTOR may write only to
   // patients linked to a profile they hold READ_WRITE on (per-patient).

@@ -74,10 +74,8 @@ export const FREE_MODELS    = Object.keys(AI_MODELS).filter((k) => AI_MODELS[k].
 export const PREMIUM_MODELS = Object.keys(AI_MODELS);
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
-function buildPrompt(patientData) {
-  const { demographics, visits } = patientData;
-
-  const visitSummaries = (visits || [])
+function formatVisits(visits) {
+  return (visits || [])
     .slice(0, 10)
     .map((v, i) => `Visit ${i + 1} (${new Date(v.date).toDateString()}):
   Chief Complaint: ${v.chiefComplaint}
@@ -87,6 +85,37 @@ function buildPrompt(patientData) {
   Tests Prescribed: ${v.testsPrescribed || 'N/A'}
   Notes: ${v.notes || 'N/A'}`)
     .join('\n\n');
+}
+
+function buildPrompt(patientData) {
+  // ── Combined multi-patient summary ──
+  if (Array.isArray(patientData.patients)) {
+    const sections = patientData.patients.map((p, idx) => {
+      const d = p.demographics || {};
+      return `── PATIENT ${idx + 1}: ${p.name || 'Unknown'} ──
+Age: ${d.age ?? 'Unknown'} | Gender: ${d.gender ?? 'Unknown'} | Blood Group: ${d.bloodGroup || 'Unknown'}
+Allergies: ${d.allergies || 'None documented'}
+Chronic Conditions: ${d.chronicConditions || 'None documented'}
+Visit history:
+${formatVisits(p.visits) || 'No visits recorded.'}`;
+    }).join('\n\n');
+
+    return `You are a clinical assistant. Provide a COMBINED clinical summary across the following ${patientData.patients.length} patients for a doctor's review.
+
+${sections}
+
+Provide a structured summary covering:
+1. Cohort Overview (who these patients are)
+2. Notable Conditions & Patterns across the group
+3. Per-Patient Key Points (one short paragraph each, headed by the patient's name in bold)
+4. Cross-Patient Observations or shared risks (if any)
+5. Recommendations for the consulting doctor
+
+Be concise, clinically precise, and flag any critical concerns. This is decision-support only; the treating clinician is responsible for all decisions.`;
+  }
+
+  // ── Single-patient summary ──
+  const { demographics, visits } = patientData;
 
   return `You are a clinical assistant. Summarize the following patient's medical history concisely for a doctor's review.
 
@@ -98,7 +127,7 @@ Allergies: ${demographics.allergies || 'None documented'}
 Chronic Conditions: ${demographics.chronicConditions || 'None documented'}
 
 VISIT HISTORY (most recent first):
-${visitSummaries || 'No visits recorded.'}
+${formatVisits(visits) || 'No visits recorded.'}
 
 Provide a structured clinical summary covering:
 1. Patient Overview

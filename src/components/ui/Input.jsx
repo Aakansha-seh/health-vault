@@ -32,8 +32,15 @@ export function Input({
   numeric    = false,
 }) {
   const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
-  const borderColor = error ? C.error : focused ? C.secondary : C.border;
+  const borderColor = error
+    ? C.error
+    : focused
+      ? C.secondary
+      : hovered
+        ? C.gray[400]
+        : C.border;
 
   const fieldStyle = {
     width:        '100%',
@@ -45,7 +52,7 @@ export function Input({
     color:        C.ink,
     fontFamily:   'Inter',
     resize:       multiline ? 'vertical' : 'none',
-    transition:   'border-color .15s, box-shadow .15s',
+    transition:   'border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     outline:      'none',
     boxShadow:    focused && !error ? `0 0 0 3px ${C.secondary}22` : 'none',
     ...(numeric ? tnum : null),
@@ -70,6 +77,8 @@ export function Input({
             placeholder={placeholder}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
             disabled={disabled}
           />
         ) : (
@@ -81,6 +90,8 @@ export function Input({
             placeholder={placeholder}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
             disabled={disabled}
           />
         )}

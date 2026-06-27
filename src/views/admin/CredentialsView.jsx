@@ -6,11 +6,18 @@ const ROLES = ['DOCTOR', 'RECEPTIONIST'];
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
 
-function Badge({ label, color }) {
-  const map = { active: '#2E7D32', inactive: '#C62828', DOCTOR: '#1565C0', RECEPTIONIST: '#6A1B9A' };
-  const bg  = map[label] ?? C.secondary;
+function Badge({ label }) {
+  // Token-based so the pills invert correctly in Night Mode. Roles aren't
+  // clinical status, so RECEPTIONIST uses a neutral chip rather than a colour.
+  const map = {
+    active:       { bg: C.successSoft,  color: C.success },
+    inactive:     { bg: C.criticalSoft, color: C.critical },
+    DOCTOR:       { bg: C.infoSoft,     color: C.info },
+    RECEPTIONIST: { bg: C.gray[100],    color: C.gray[600] },
+  };
+  const s = map[label] ?? { bg: C.gray[100], color: C.muted };
   return (
-    <span style={{ background: `${bg}18`, color: bg, borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>
+    <span style={{ background: s.bg, color: s.color, borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>
       {label}
     </span>
   );

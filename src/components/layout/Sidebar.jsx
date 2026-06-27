@@ -97,7 +97,7 @@ function LogoMark() {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-export function Sidebar({ actor, view, setView, navViews, onLogout, isOpen, onToggle }) {
+export function Sidebar({ actor, view, setView, navViews, onLogout, isOpen, onToggle, isDarkMode, onToggleTheme }) {
   const W            = isOpen ? EXPANDED_W : COLLAPSED_W;
   const hospitalName = actor?.hospitalName ?? actor?.hospital?.name ?? 'Hospital';
   const actorName    = actor?.name ?? actor?.label ?? '';
@@ -196,8 +196,8 @@ export function Sidebar({ actor, view, setView, navViews, onLogout, isOpen, onTo
                   whiteSpace: 'nowrap',
                 }}
               >
-                {/* Active indicator bar when collapsed */}
-                {active && !isOpen && (
+                {/* Active indicator bar */}
+                {active && (
                   <span style={{
                     position: 'absolute', left: 0, top: '50%',
                     transform: 'translateY(-50%)',
@@ -234,6 +234,33 @@ export function Sidebar({ actor, view, setView, navViews, onLogout, isOpen, onTo
                   <div style={{ fontSize: 11, color: C.muted }}>{roleLabel}</div>
                 </div>
               </div>
+
+              {/* Night Mode Toggle */}
+              <button
+                onClick={onToggleTheme}
+                className="hv-logout-btn"
+                style={{
+                  width: '100%', padding: '8px 0', borderRadius: 8,
+                  border: `1px solid ${C.border}`,
+                  cursor: 'pointer', background: 'transparent',
+                  color: C.muted, fontSize: 12, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  marginBottom: 8,
+                }}
+              >
+                {isDarkMode ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    Light Mode
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    Night Mode
+                  </>
+                )}
+              </button>
+
               <button
                 onClick={onLogout}
                 className="hv-logout-btn"
@@ -254,22 +281,40 @@ export function Sidebar({ actor, view, setView, navViews, onLogout, isOpen, onTo
               </button>
             </>
           ) : (
-            <button
-              onClick={onLogout}
-              title="Sign out"
-              className="hv-logout-btn"
-              style={{
-                width: '100%', padding: '9px 0', borderRadius: 8,
-                border: 'none', cursor: 'pointer', background: 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16 17 21 12 16 7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+              <button
+                onClick={onToggleTheme}
+                title={isDarkMode ? 'Light Mode' : 'Night Mode'}
+                className="hv-logout-btn"
+                style={{
+                  width: '100%', padding: '9px 0', borderRadius: 8,
+                  border: 'none', cursor: 'pointer', background: 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                {isDarkMode ? (
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                ) : (
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                )}
+              </button>
+              <button
+                onClick={onLogout}
+                title="Sign out"
+                className="hv-logout-btn"
+                style={{
+                  width: '100%', padding: '9px 0', borderRadius: 8,
+                  border: 'none', cursor: 'pointer', background: 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+              </button>
+            </div>
           )}
         </div>
       </aside>
