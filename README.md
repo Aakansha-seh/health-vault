@@ -101,6 +101,16 @@ The frontend needs no env in dev (it proxies `/api`). For a split deployment set
 
 ---
 
+## Live link testing credentials:
+Admin:
+admin@hospital.indian
+0987654321
+#Login as Staff
+Reception
+receptionist@hospital.indian
+0987654321
+
+---
 ## Tech stack
 
 React · Vite · Recharts · Express · Prisma · PostgreSQL · JWT + bcrypt · Zod · Helmet · express-rate-limit · Azure Blob Storage · Razorpay · OpenAI/Anthropic/Google/DeepSeek/Groq/Perplexity/z.ai/Mistral SDKs.
