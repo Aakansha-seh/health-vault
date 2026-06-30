@@ -111,8 +111,21 @@ router.get('/', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// A doctor may only register patients if they hold READ_WRITE on at least one
+// profile. Receptionists (front desk) always may. Read-only doctors may not.
+async function doctorHasWriteAccess(credentialId) {
+  const rw = await prisma.profileAccess.findFirst({
+    where: { credentialId, permission: 'READ_WRITE' },
+    select: { id: true },
+  });
+  return !!rw;
+}
+
 router.post('/', authenticateCredential, async (req, res, next) => {
   try {
+    if (req.actor.role === 'DOCTOR' && !(await doctorHasWriteAccess(req.actor.id))) {
+      return res.status(403).json({ error: 'Read-only access — you cannot register patients. Ask your administrator for write access.' });
+    }
     const data = PatientSchema.parse(req.body);
     const patient = await prisma.patient.create({
       data: { ...clean(data), hospitalId: req.actor.hospitalId, registeredBy: req.actor.id },
@@ -170,6 +183,10 @@ const IntakeSchema = z.object({
 router.post('/intake', authenticateCredential, async (req, res, next) => {
   try {
     const data = IntakeSchema.parse(req.body);
+
+    if (req.actor.role === 'DOCTOR' && !(await doctorHasWriteAccess(req.actor.id))) {
+      return res.status(403).json({ error: 'Read-only access — you cannot register patients. Ask your administrator for write access.' });
+    }
 
     const profile = await prisma.doctorProfile.findFirst({
       where: { id: data.doctorProfileId, hospitalId: req.actor.hospitalId },

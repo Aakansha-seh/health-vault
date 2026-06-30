@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { C, shadow } from '../../constants/theme';
 import { PatientIntakeForm } from './PatientIntakeForm';
 import { ReportUploader, openReportFile } from '../../components/ui/ReportUploader';
+import { SearchableSelect } from '../../components/ui/SearchableSelect';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
@@ -104,10 +105,13 @@ function Field({ label, children }) {
   );
 }
 
-function Modal({ title, onClose, children, wide }) {
+function Modal({ title, onClose, children, wide, closeOnBackdrop = true }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: C.white, borderRadius: 16, width: '100%', maxWidth: wide ? 700 : 520, maxHeight: '92vh', overflowY: 'auto', padding: 28 }}>
+    <div
+      onMouseDown={closeOnBackdrop ? (e) => { if (e.target === e.currentTarget) onClose?.(); } : undefined}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+    >
+      <div onMouseDown={e => e.stopPropagation()} style={{ background: C.white, borderRadius: 16, width: '100%', maxWidth: wide ? 700 : 520, maxHeight: '92vh', overflowY: 'auto', padding: 28 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ color: C.primary, fontSize: 17, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: 22 }}>×</button>
@@ -198,13 +202,20 @@ function PatientForm({ initial = {}, onSave, onClose, submitLabel = 'Save' }) {
 
 // ── Visit Form ────────────────────────────────────────────────────────────────
 
-function VisitForm({ patient, doctorProfiles, onSave, onClose }) {
+function VisitForm({ patient, doctorProfiles, onSave, onClose, initial = {}, submitLabel = 'Save Visit' }) {
+  const isEdit = !!initial?.id;
   const [form, setForm] = useState({
-    doctorProfileId: doctorProfiles?.[0]?.id ?? '',
-    date: new Date().toISOString().split('T')[0],
-    chiefComplaint: '', diagnosis: '', prescription: '', testsPrescribed: '', notes: '', followUpDate: '', weight: '',
+    doctorProfileId: initial.doctorProfileId ?? initial.doctorProfile?.id ?? doctorProfiles?.[0]?.id ?? '',
+    date: initial.date ? new Date(initial.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    chiefComplaint:  initial.chiefComplaint  ?? '',
+    diagnosis:       initial.diagnosis       ?? '',
+    prescription:    initial.prescription    ?? '',
+    testsPrescribed: initial.testsPrescribed ?? '',
+    notes:           initial.notes           ?? '',
+    followUpDate:    initial.followUpDate ? new Date(initial.followUpDate).toISOString().split('T')[0] : '',
+    weight:          initial.weight ?? '',
   });
-  const [reports, setReports] = useState([]);   // [{ name, url, type, reportType }]
+  const [reports, setReports] = useState(Array.isArray(initial.testReports) ? initial.testReports : []);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -212,38 +223,43 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose }) {
   const handleSubmit = async e => {
     e.preventDefault();
     if (!form.doctorProfileId) { setError('Select a doctor profile'); return; }
+    if (!form.chiefComplaint.trim()) { setError('Chief complaint is required'); return; }
     setLoading(true); setError('');
-    const payload = {
-      doctorProfileId: form.doctorProfileId,
-      date:            form.date,
+    const common = {
       chiefComplaint:  form.chiefComplaint,
       diagnosis:       form.diagnosis || undefined,
       prescription:    form.prescription || undefined,
       testsPrescribed: form.testsPrescribed || undefined,
       notes:           form.notes || undefined,
-      followUpDate:    form.followUpDate || undefined,
       weight:          form.weight ? Number(form.weight) : undefined,
       testReports:     reports.length ? reports : undefined,
     };
+    // On edit, doctor/date/follow-up are immutable (the backend ignores them).
+    const payload = isEdit
+      ? common
+      : { ...common, doctorProfileId: form.doctorProfileId, date: form.date, followUpDate: form.followUpDate || undefined };
     try { await onSave(payload); onClose(); }
     catch (err) { setError(err.message); setLoading(false); }
   };
 
   return (
     <form onSubmit={handleSubmit}>
-      <p style={{ color: C.muted, fontSize: 13, marginBottom: 16 }}>Recording visit for <strong style={{ color: C.primary }}>{patient.name}</strong></p>
+      <p style={{ color: C.muted, fontSize: 13, marginBottom: 16 }}>{isEdit ? 'Editing visit for' : 'Recording visit for'} <strong style={{ color: C.primary }}>{patient.name}</strong></p>
       <Field label="Doctor Profile *">
-        <select style={inputStyle} value={form.doctorProfileId} onChange={set('doctorProfileId')} required>
-          <option value="">Select profile</option>
-          {doctorProfiles.map(p => <option key={p.id} value={p.id}>{p.name} — {p.specialty ?? 'General'}</option>)}
-        </select>
+        <SearchableSelect
+          value={form.doctorProfileId}
+          onChange={set('doctorProfileId')}
+          disabled={isEdit}
+          placeholder="Select profile"
+          options={doctorProfiles.map(p => ({ value: p.id, label: `${p.name} — ${p.specialty ?? 'General'}` }))}
+        />
       </Field>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
         <Field label="Visit Date">
-          <input style={inputStyle} type="date" value={form.date} onChange={set('date')} />
+          <input style={{ ...inputStyle, opacity: isEdit ? 0.6 : 1 }} type="date" value={form.date} onChange={set('date')} disabled={isEdit} />
         </Field>
         <Field label="Follow-up Date">
-          <input style={inputStyle} type="date" value={form.followUpDate} onChange={set('followUpDate')} />
+          <input style={{ ...inputStyle, opacity: isEdit ? 0.6 : 1 }} type="date" value={form.followUpDate} onChange={set('followUpDate')} disabled={isEdit} />
         </Field>
         <Field label="Weight (kg)">
           <input style={inputStyle} type="number" min="0" step="0.1" value={form.weight} onChange={set('weight')} placeholder="e.g. 72.5" />
@@ -271,7 +287,7 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose }) {
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button type="button" onClick={onClose} style={{ ...btnPrimary, background: C.bg, color: C.text }}>Cancel</button>
         <button type="submit" disabled={loading} style={{ ...btnPrimary, opacity: loading ? 0.7 : 1 }}>
-          {loading ? 'Saving…' : 'Save Visit'}
+          {loading ? 'Saving…' : submitLabel}
         </button>
       </div>
     </form>
@@ -280,12 +296,17 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose }) {
 
 // ── Patient Detail ────────────────────────────────────────────────────────────
 
-function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdatePatient, onRequestAccess, onClose }) {
+function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdateVisit, onUpdatePatient, onRequestAccess, onClose }) {
   const [tab,         setTab]         = useState('visits');
   const [showVisit,   setShowVisit]   = useState(false);
   const [showEdit,    setShowEdit]    = useState(false);
+  const [editVisit,   setEditVisit]   = useState(null);   // a visit being edited (within 12h)
   const [reqStatus,   setReqStatus]   = useState('idle'); // idle | sending | sent | error
   const [reqMsg,      setReqMsg]      = useState('');
+
+  // A visit may be edited only within 12 hours of creation (and with write access).
+  const editableVisit = (v) =>
+    canWrite && v.createdAt && (Date.now() - new Date(v.createdAt).getTime()) < 12 * 60 * 60 * 1000;
 
   const age = patient.dob
     ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
@@ -306,7 +327,7 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
   };
 
   return (
-    <Modal title={patient.name} onClose={onClose} wide>
+    <Modal title={patient.name} onClose={onClose} wide closeOnBackdrop>
       {/* Patient header */}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ width: 52, height: 52, borderRadius: '50%', background: `${C.secondary}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -376,11 +397,16 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
             <p style={{ color: C.muted, fontSize: 13, padding: '16px 0' }}>No visits recorded yet.</p>
           ) : [...(patient.visits ?? [])].sort((a, b) => new Date(b.date) - new Date(a.date)).map(v => (
             <div key={v.id} style={{ padding: '14px 0', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: C.primary }}>
                   {new Date(v.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </span>
-                {v.doctorProfile?.name && <span style={{ fontSize: 12, color: C.secondary }}>{v.doctorProfile.name}</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {v.doctorProfile?.name && <span style={{ fontSize: 12, color: C.secondary }}>{v.doctorProfile.name}</span>}
+                  {editableVisit(v) && (
+                    <button type="button" onClick={() => setEditVisit(v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.secondary, fontSize: 12, fontWeight: 600, padding: 0 }}>Edit</button>
+                  )}
+                </div>
               </div>
               {v.chiefComplaint  && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Complaint:</strong> {renderTextWithVitals(v.chiefComplaint)}</p>}
               {(v.weight || v.weight === 0) && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Weight:</strong> {v.weight} kg</p>}
@@ -443,17 +469,29 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
           <PatientForm initial={patient} onSave={d => onUpdatePatient(patient.id, d)} onClose={() => setShowEdit(false)} />
         </Modal>
       )}
+      {editVisit && (
+        <Modal title="Edit Visit" onClose={() => setEditVisit(null)}>
+          <VisitForm
+            patient={patient}
+            doctorProfiles={doctorProfiles}
+            initial={editVisit}
+            submitLabel="Save Changes"
+            onSave={d => onUpdateVisit(patient.id, editVisit.id, d)}
+            onClose={() => setEditVisit(null)}
+          />
+        </Modal>
+      )}
     </Modal>
   );
 }
 
 // ── Main View ─────────────────────────────────────────────────────────────────
 
-export function PatientsView({ actor, patients, doctorProfiles, onAddPatient, onIntake, onUpdatePatient, onAddVisit, onRequestAccess, initialPatientId, setInitialPatientId }) {
-  const [search,    setSearch]    = useState('');
-  const [showAdd,   setShowAdd]   = useState(false);
-  const [selected,  setSelected]  = useState(null);
-  const [serverSearch, setServerSearch] = useState('');
+export function PatientsView({ actor, patients, doctorProfiles, onAddPatient, onIntake, onUpdatePatient, onAddVisit, onUpdateVisit, onRequestAccess, initialPatientId, setInitialPatientId }) {
+  const [search,       setSearch]       = useState('');
+  const [doctorFilter, setDoctorFilter] = useState('');   // filter patients by doctor profile
+  const [showAdd,      setShowAdd]       = useState(false);
+  const [selected,     setSelected]      = useState(null);
 
   useEffect(() => {
     if (initialPatientId) {
@@ -473,12 +511,17 @@ export function PatientsView({ actor, patients, doctorProfiles, onAddPatient, on
   const canWritePatient = (p) =>
     isPrivileged || (p?.visits ?? []).some(v => rwProfileIds.has(v.doctorProfile?.id ?? v.doctorProfileId));
 
-  // Client-side filter for loaded patients
-  const filtered = patients.filter(p =>
-    p.name?.toLowerCase().includes(search.toLowerCase()) ||
-    p.phone?.includes(search) ||
-    p.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  // Client-side filter for loaded patients (search + doctor)
+  const filtered = patients.filter(p => {
+    const q = search.toLowerCase();
+    const matchesSearch = !search
+      || p.name?.toLowerCase().includes(q)
+      || p.phone?.includes(search)
+      || p.email?.toLowerCase().includes(q);
+    const matchesDoctor = !doctorFilter
+      || (p.visits ?? []).some(v => (v.doctorProfile?.id ?? v.doctorProfileId) === doctorFilter);
+    return matchesSearch && matchesDoctor;
+  });
 
   const formatDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
@@ -498,13 +541,23 @@ export function PatientsView({ actor, patients, doctorProfiles, onAddPatient, on
         )}
       </div>
 
-      {/* Search */}
-      <div style={{ position: 'relative', marginBottom: 16, maxWidth: 420 }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill={C.muted} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}>
-          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-        </svg>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, phone, email…"
-          style={{ width: '100%', padding: '9px 12px 9px 36px', borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 13, color: C.text, background: C.white, boxSizing: 'border-box' }} />
+      {/* Search + doctor filter */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 220, maxWidth: 420 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill={C.muted} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}>
+            <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          </svg>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, phone, email…"
+            style={{ width: '100%', padding: '9px 12px 9px 36px', borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 13, color: C.text, background: C.white, boxSizing: 'border-box' }} />
+        </div>
+        <div style={{ minWidth: 200 }}>
+          <SearchableSelect
+            value={doctorFilter}
+            onChange={e => setDoctorFilter(e.target.value)}
+            placeholder="All doctors"
+            options={[{ value: '', label: 'All doctors' }, ...doctorProfiles.map(d => ({ value: d.id, label: `${d.name}${d.specialty ? ` — ${d.specialty}` : ''}` }))]}
+          />
+        </div>
       </div>
 
       {/* Table */}
@@ -568,6 +621,7 @@ export function PatientsView({ actor, patients, doctorProfiles, onAddPatient, on
           doctorProfiles={doctorProfiles}
           canWrite={canWritePatient(selected)}
           onAddVisit={onAddVisit}
+          onUpdateVisit={onUpdateVisit}
           onUpdatePatient={onUpdatePatient}
           onRequestAccess={onRequestAccess}
           onClose={() => setSelected(null)}

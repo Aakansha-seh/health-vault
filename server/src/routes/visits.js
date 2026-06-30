@@ -98,6 +98,12 @@ router.patch('/:patientId/visits/:id', authenticateCredential, async (req, res, 
     });
     if (!visit) return res.status(404).json({ error: 'Visit not found' });
 
+    // A visit can only be edited within 12 hours of its creation.
+    const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+    if (Date.now() - new Date(visit.createdAt).getTime() > TWELVE_HOURS) {
+      return res.status(403).json({ error: 'This visit can no longer be edited — the 12-hour edit window has passed.' });
+    }
+
     if (req.actor.role === 'DOCTOR') {
       const access = await prisma.profileAccess.findUnique({
         where: { credentialId_doctorProfileId: { credentialId: req.actor.id, doctorProfileId: visit.doctorProfileId } },

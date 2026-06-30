@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { C, shadow } from '../../constants/theme';
+import { SearchableSelect } from '../../components/ui/SearchableSelect';
 
 const STATUS_OPTS = ['scheduled', 'completed', 'cancelled'];
 
@@ -38,8 +39,8 @@ function StatusBadge({ status }) {
 
 function Modal({ title, onClose, children }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: C.white, borderRadius: 16, width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', padding: 28 }}>
+    <div onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onMouseDown={e => e.stopPropagation()} style={{ background: C.white, borderRadius: 16, width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', padding: 28 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ color: C.primary, fontSize: 17, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: 22 }}>×</button>
@@ -85,16 +86,20 @@ function AppointmentForm({ initial = {}, patients, doctorProfiles, onSave, onClo
   return (
     <form onSubmit={handleSubmit}>
       <Field label="Patient *">
-        <select style={inputStyle} value={form.patientId} onChange={set('patientId')} required>
-          <option value="">Select patient…</option>
-          {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        <SearchableSelect
+          value={form.patientId}
+          onChange={set('patientId')}
+          placeholder="Select patient…"
+          options={patients.map(p => ({ value: p.id, label: p.name }))}
+        />
       </Field>
       <Field label="Doctor Profile *">
-        <select style={inputStyle} value={form.doctorProfileId} onChange={set('doctorProfileId')} required>
-          <option value="">Select doctor…</option>
-          {doctorProfiles.map(p => <option key={p.id} value={p.id}>{p.name} — {p.specialty ?? 'General'}</option>)}
-        </select>
+        <SearchableSelect
+          value={form.doctorProfileId}
+          onChange={set('doctorProfileId')}
+          placeholder="Select doctor…"
+          options={doctorProfiles.map(p => ({ value: p.id, label: `${p.name} — ${p.specialty ?? 'General'}` }))}
+        />
       </Field>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
         <Field label="Date *">

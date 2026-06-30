@@ -301,6 +301,14 @@ export function AISummaryView({ actor, patients, doctorProfiles, onSaveSummary }
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {           // type a name, press Enter to select the top match
+                      e.preventDefault();
+                      if (filtered[0]) { toggle(filtered[0].id); setSearch(''); }
+                    } else if (e.key === 'Escape') {
+                      setPatOpen(false);
+                    }
+                  }}
                   placeholder="Search patients…"
                   autoFocus
                   style={{ ...selectStyle, marginBottom: 8 }}

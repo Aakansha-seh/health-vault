@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { C } from '../../constants/theme';
 import { ReportUploader } from '../../components/ui/ReportUploader';
+import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { Input, Button, Select } from '../../components/ui';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
@@ -45,13 +46,20 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
     setStep(s => s - 1);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (step < 2) {
-      handleNext();
-      return;
+  // In this multi-step wizard, pressing Enter inside a field must NOT submit or
+  // advance — only the explicit Next / Register buttons should. Textareas keep
+  // Enter for newlines. This prevents the form from registering the patient
+  // before the user has finished (e.g. on the upload step).
+  const handleFormKeyDown = (e) => {
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      e.preventDefault();
     }
+  };
 
+  // Registration happens ONLY when the user explicitly clicks "Register Patient"
+  // on the final step — never via an implicit form submit. (The form has no
+  // submit button and swallows Enter, so it can't auto-save.)
+  const handleRegister = async () => {
     if (form.appointmentDate && !form.appointmentTime) { setError('Pick a time for the next appointment'); return; }
     if (form.appointmentTime && !form.appointmentDate) { setError('Pick a date for the next appointment'); return; }
 
@@ -88,7 +96,7 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
   const noDoctors = doctorProfiles.length === 0;
 
   return (
-    <form onSubmit={handleSubmit} className="hv-fade-up">
+    <form onSubmit={(e) => e.preventDefault()} onKeyDown={handleFormKeyDown} className="hv-fade-up">
       {/* Steps indicator */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
         {STEPS.map((s, i) => (
@@ -157,15 +165,13 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px' }} className="hv-fade-up">
             <SectionTitle>Consultation Details</SectionTitle>
             <div style={{ gridColumn: '1/-1' }}>
-              <Select 
-                label="Assign Doctor *" 
-                value={form.doctorProfileId} 
-                onChange={set('doctorProfileId')}
+              <SearchableSelect
+                label="Assign Doctor *"
                 required
-                options={[
-                  { value: '', label: noDoctors ? 'No doctor profiles available' : 'Select doctor…' },
-                  ...doctorProfiles.map(p => ({ value: p.id, label: `${p.name} — ${p.specialty ?? 'General'}` }))
-                ]}
+                value={form.doctorProfileId}
+                onChange={set('doctorProfileId')}
+                placeholder={noDoctors ? 'No doctor profiles available' : 'Select doctor…'}
+                options={doctorProfiles.map(p => ({ value: p.id, label: `${p.name} — ${p.specialty ?? 'General'}` }))}
               />
             </div>
             <div style={{ gridColumn: '1/-1' }}>
@@ -214,7 +220,7 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
         {step < 2 ? (
           <Button type="button" onClick={handleNext}>Next</Button>
         ) : (
-          <Button type="submit" disabled={loading}>
+          <Button type="button" onClick={handleRegister} disabled={loading}>
             {loading ? 'Saving…' : 'Register Patient'}
           </Button>
         )}

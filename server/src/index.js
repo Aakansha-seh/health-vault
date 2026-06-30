@@ -82,6 +82,15 @@ app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));
 // Global error handler
 app.use(errorHandler);
 
+// Safety net: log async/uncaught errors instead of letting them crash the
+// process. (A pm2/systemd restart still happens if the process truly dies.)
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+
 // Start
 app.listen(PORT, () => {
   console.log(`\n  HealthVault API v2`);
