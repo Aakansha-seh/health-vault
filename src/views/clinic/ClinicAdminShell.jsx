@@ -112,6 +112,26 @@ export function ClinicAdminShell({ clinic, doctors, patients, appointments, audi
           ))}
         </nav>
 
+        {/* Google Form Feedback Review */}
+        <button
+          onClick={() => window.open('https://docs.google.com/forms/d/e/1FAIpQLScE87vKLK9Gug6aEJK6b_aKT00LzapNnSV88vFAZq2f-0J4uw/viewform?usp=publish-editor', '_blank', 'noopener,noreferrer')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px',
+            borderRadius: 8, border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left',
+            background: 'transparent', color: C.text,
+            fontFamily: 'Inter', fontSize: 14, fontWeight: 400,
+            transition: 'background .12s, color .12s',
+            marginBottom: 2
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = C.bg; e.currentTarget.style.color = C.primary; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.text; }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+          Rate Portal
+        </button>
+
         {/* Logout */}
         <button
           className="clinic-logout"

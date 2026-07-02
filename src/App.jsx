@@ -452,7 +452,62 @@ export default function App() {
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   if (!splashed) return <><GlobalStyle /><SplashScreen onComplete={() => setSplashed(true)} /></>;
-  if (authLoading) return <><GlobalStyle /><div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background: C.bg, color: C.muted, fontSize: 14 }}>Loading…</div></>;
+  if (authLoading) {
+    return (
+      <>
+        <GlobalStyle />
+        <div className="hv-bg-grid" style={{ display: 'flex', minHeight: '100vh' }}>
+          {/* Skeleton Sidebar */}
+          {!isMobile && (
+            <div className="hv-glass-panel" style={{ width: sidebarOpen ? 256 : 68, padding: 18, display: 'flex', flexDirection: 'column', gap: 20, borderRight: `1px solid ${C.border}`, flexShrink: 0, transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)' }}>
+              <div className="hv-skeleton" style={{ height: 32, width: sidebarOpen ? 120 : 32, borderRadius: 8 }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 24 }}>
+                {[1, 2, 3, 4, 5].map(i => (
+                  <div key={i} className="hv-skeleton" style={{ height: 36, width: sidebarOpen ? '100%' : 32, borderRadius: 6 }} />
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Skeleton Main Dashboard */}
+          <div style={{ flex: 1, padding: isMobile ? '16px 14px' : '28px 32px' }}>
+            {/* Top Bar Skeleton */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+              <div className="hv-skeleton" style={{ height: 28, width: 200, borderRadius: 6 }} />
+              <div className="hv-skeleton" style={{ height: 32, width: 32, borderRadius: '50%' }} />
+            </div>
+            {/* Stats Row Skeleton */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="hv-glass-panel" style={{ flex: 1, minWidth: 150, padding: 20, borderRadius: 10 }}>
+                  <div className="hv-skeleton" style={{ height: 12, width: 80, marginBottom: 12 }} />
+                  <div className="hv-skeleton" style={{ height: 24, width: 50 }} />
+                </div>
+              ))}
+            </div>
+            {/* Main panels skeleton */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 20 }}>
+              <div className="hv-glass-panel" style={{ height: 300, borderRadius: 12, padding: 20 }}>
+                <div className="hv-skeleton" style={{ height: 20, width: 140, marginBottom: 20 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="hv-skeleton" style={{ height: 32, width: '100%', borderRadius: 6 }} />
+                  ))}
+                </div>
+              </div>
+              <div className="hv-glass-panel" style={{ height: 300, borderRadius: 12, padding: 20 }}>
+                <div className="hv-skeleton" style={{ height: 20, width: 100, marginBottom: 20 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="hv-skeleton" style={{ height: 48, width: '100%', borderRadius: 6 }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   if (showSetup) return <><GlobalStyle /><HospitalSetup onComplete={() => setShowSetup(false)} /></>;
 
@@ -513,7 +568,7 @@ export default function App() {
   return (
     <>
       <GlobalStyle />
-      <div style={{ display: 'flex', minHeight: '100vh', background: C.bg }}>
+      <div className="hv-bg-grid" style={{ display: 'flex', minHeight: '100vh' }}>
         {!isMobile && (
           <Sidebar
             actor={actor}

@@ -27,8 +27,23 @@ function Field({ label, children }) {
 
 function Modal({ title, onClose, children }) {
   return (
-    <div onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div onMouseDown={e => e.stopPropagation()} style={{ background: C.white, borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto', padding: 28 }}>
+    <div
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      className="hv-modal-backdrop-anim"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--hv-backdrop-bg)',
+        backdropFilter: 'blur(var(--hv-backdrop-blur))',
+        WebkitBackdropFilter: 'blur(var(--hv-backdrop-blur))',
+        zIndex: 300,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16
+      }}
+    >
+      <div onMouseDown={e => e.stopPropagation()} className="hv-modal-card-anim" style={{ background: C.white, borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '85vh', overflowY: 'auto', padding: 28, boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ color: C.primary, fontSize: 17, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: 22, lineHeight: 1 }}>×</button>

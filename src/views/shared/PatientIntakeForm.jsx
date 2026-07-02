@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { C } from '../../constants/theme';
 import { ReportUploader } from '../../components/ui/ReportUploader';
 import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { Input, Button, Select } from '../../components/ui';
+import { parseClinicalTranscript } from '../../utils/helpers';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
@@ -29,6 +30,86 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
   const [error,   setError]   = useState('');
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const [showSmartScribe, setShowSmartScribe] = useState(false);
+  const [scribeTranscript, setScribeTranscript] = useState('');
+  const [scribeListening, setScribeListening] = useState(false);
+  const [scribeExtracted, setScribeExtracted] = useState(false);
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  useEffect(() => {
+    return () => {
+      if (window.hvScribeRecognizerIntake) {
+        try { window.hvScribeRecognizerIntake.stop(); } catch (_) {}
+      }
+    };
+  }, []);
+
+  const toggleScribeListening = () => {
+    if (!SpeechRecognition) return;
+
+    if (scribeListening) {
+      if (window.hvScribeRecognizerIntake) {
+        try { window.hvScribeRecognizerIntake.stop(); } catch (_) {}
+      }
+      setScribeListening(false);
+      return;
+    }
+
+    try {
+      const recognizer = new SpeechRecognition();
+      recognizer.continuous = true;
+      recognizer.interimResults = true;
+      recognizer.lang = 'en-IN';
+
+      recognizer.onstart = () => {
+        setScribeListening(true);
+      };
+
+      recognizer.onresult = (event) => {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
+          }
+        }
+        if (finalTranscript) {
+          setScribeTranscript(prev => (prev ? `${prev.trim()} ${finalTranscript.trim()}` : finalTranscript.trim()));
+        }
+      };
+
+      recognizer.onerror = (e) => {
+        console.error('Intake Scribe recognition error:', e);
+        setScribeListening(false);
+      };
+
+      recognizer.onend = () => {
+        setScribeListening(false);
+      };
+
+      window.hvScribeRecognizerIntake = recognizer;
+      recognizer.start();
+    } catch (err) {
+      console.error('Failed starting intake conversation recorder:', err);
+      setScribeListening(false);
+    }
+  };
+
+  const handleExtractScribe = () => {
+    if (!scribeTranscript.trim()) return;
+    const parsed = parseClinicalTranscript(scribeTranscript);
+    setForm(prev => ({
+      ...prev,
+      symptoms: parsed.chiefComplaint || prev.symptoms,
+      diagnosis: parsed.diagnosis || prev.diagnosis,
+      testsPrescribed: parsed.testsPrescribed || prev.testsPrescribed,
+      prescription: parsed.prescription || prev.prescription,
+      notes: parsed.notes || prev.notes
+    }));
+    setScribeExtracted(true);
+    setTimeout(() => setScribeExtracted(false), 2000);
+  };
 
   const handleNext = () => {
     setError('');
@@ -153,7 +234,7 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
             />
 
             <div style={{ gridColumn: '1/-1' }}>
-              <Input label="Known Allergies" value={form.allergies} onChange={set('allergies')} placeholder="Penicillin, dust… (leave blank if none)" />
+              <Input label="Known Allergies" value={form.allergies} onChange={set('allergies')} placeholder="Penicillin, dust… (leave blank if none)" voice />
             </div>
             <div style={{ gridColumn: '1/-1' }}>
               <Input label="Address" value={form.address} onChange={set('address')} placeholder="Full address" />
@@ -164,6 +245,127 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
         {step === 1 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px' }} className="hv-fade-up">
             <SectionTitle>Consultation Details</SectionTitle>
+
+            {/* ── Smart Conversation AI Scribe Panel ── */}
+            <div 
+              className="hv-glass-panel" 
+              style={{ 
+                gridColumn: '1/-1',
+                borderRadius: 12, 
+                padding: 14, 
+                border: '1px solid var(--hv-border)',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
+              }}
+            >
+              <div 
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                onClick={() => setShowSmartScribe(!showSmartScribe)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--hv-secondary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="22"/>
+                  </svg>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--hv-primary)' }}>
+                    Smart Clinical Conversation Scribe
+                  </span>
+                </div>
+                <span style={{ fontSize: 12, color: C.secondary, fontWeight: 600 }}>
+                  {showSmartScribe ? 'Hide Scribe' : 'Show Scribe'}
+                </span>
+              </div>
+
+              {showSmartScribe && (
+                <div className="fade-in" style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.4, margin: 0 }}>
+                    Record or paste the full doctor-patient consultation. Our client-side clinical parser will instantly populate Symptoms, Diagnosis, Tests, Prescriptions, and Notes.
+                  </p>
+                  <textarea
+                    style={{
+                      width: '100%',
+                      minHeight: 100,
+                      padding: 10,
+                      borderRadius: 8,
+                      border: '1px solid var(--hv-border)',
+                      background: 'var(--hv-surface)',
+                      color: 'var(--hv-text)',
+                      fontSize: 12,
+                      fontFamily: 'Inter',
+                      resize: 'vertical',
+                      outline: 'none'
+                    }}
+                    value={scribeTranscript}
+                    onChange={e => setScribeTranscript(e.target.value)}
+                    placeholder="Paste dialogue transcript here, or click the mic below to start recording live consultation conversation..."
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {SpeechRecognition ? (
+                        <button
+                          type="button"
+                          onClick={toggleScribeListening}
+                          className={`hv-scribe-btn ${scribeListening ? 'hv-mic-active' : ''}`}
+                          style={{
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            gap: 6,
+                            background: scribeListening ? 'var(--hv-critical-soft)' : 'var(--hv-surface)',
+                            color: scribeListening ? 'var(--hv-critical)' : 'var(--hv-primary)',
+                            border: `1px solid ${scribeListening ? 'var(--hv-critical)' : 'var(--hv-border)'}`
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                          </svg>
+                          {scribeListening ? 'Listening...' : 'Record Conversation'}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 11, color: C.muted }}>Speech Recognition not supported in this browser.</span>
+                      )}
+                      {scribeTranscript && (
+                        <button
+                          type="button"
+                          onClick={() => { setScribeTranscript(''); setScribeListening(false); }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: C.muted,
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontWeight: 500
+                          }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleExtractScribe}
+                      disabled={!scribeTranscript.trim()}
+                      style={{
+                        padding: '6px 14px',
+                        fontSize: 12,
+                        background: scribeExtracted ? 'var(--hv-success)' : 'var(--hv-secondary)',
+                        color: scribeExtracted ? 'white' : undefined,
+                        opacity: scribeTranscript.trim() ? 1 : 0.6
+                      }}
+                    >
+                      {scribeExtracted ? '✓ Extracted & Filled!' : 'Extract & Populate Form'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div style={{ gridColumn: '1/-1' }}>
               <SearchableSelect
                 label="Assign Doctor *"
@@ -175,18 +377,18 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
               />
             </div>
             <div style={{ gridColumn: '1/-1' }}>
-              <Input label="Symptoms / Chief Complaint *" multiline rows={3} value={form.symptoms} onChange={set('symptoms')} placeholder="Fever, cough for 3 days…" required />
+              <Input label="Symptoms / Chief Complaint *" multiline rows={3} value={form.symptoms} onChange={set('symptoms')} placeholder="Fever, cough for 3 days…" required voice />
             </div>
             <Input label="Weight (kg)" type="number" value={form.weight} onChange={set('weight')} placeholder="e.g. 72.5" numeric />
-            <Input label="Diagnosis" value={form.diagnosis} onChange={set('diagnosis')} placeholder="Provisional diagnosis" />
+            <Input label="Diagnosis" value={form.diagnosis} onChange={set('diagnosis')} placeholder="Provisional diagnosis" voice />
             <div style={{ gridColumn: '1/-1' }}>
-              <Input label="Tests Prescribed" value={form.testsPrescribed} onChange={set('testsPrescribed')} placeholder="CBC, X-ray chest…" />
+              <Input label="Tests Prescribed" value={form.testsPrescribed} onChange={set('testsPrescribed')} placeholder="CBC, X-ray chest…" voice />
             </div>
             <div style={{ gridColumn: '1/-1' }}>
-              <Input label="Prescription" multiline rows={3} value={form.prescription} onChange={set('prescription')} placeholder="Medication, dosage, duration…" />
+              <Input label="Prescription" multiline rows={3} value={form.prescription} onChange={set('prescription')} placeholder="Medication, dosage, duration…" voice />
             </div>
             <div style={{ gridColumn: '1/-1' }}>
-              <Input label="Notes" multiline rows={2} value={form.notes} onChange={set('notes')} placeholder="Any extra observations…" />
+              <Input label="Notes" multiline rows={2} value={form.notes} onChange={set('notes')} placeholder="Any extra observations…" voice />
             </div>
           </div>
         )}
@@ -202,7 +404,7 @@ export function PatientIntakeForm({ doctorProfiles = [], onSave, onClose }) {
             <Input label="Date" type="date" value={form.appointmentDate} onChange={set('appointmentDate')} />
             <Input label="Time" type="time" value={form.appointmentTime} onChange={set('appointmentTime')} />
             <div style={{ gridColumn: '1/-1' }}>
-              <Input label="Reason" value={form.appointmentReason} onChange={set('appointmentReason')} placeholder="Follow-up, report review…" />
+              <Input label="Reason" value={form.appointmentReason} onChange={set('appointmentReason')} placeholder="Follow-up, report review…" voice />
             </div>
           </div>
         )}

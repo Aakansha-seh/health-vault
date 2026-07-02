@@ -3,6 +3,8 @@ import { C, shadow } from '../../constants/theme';
 import { PatientIntakeForm } from './PatientIntakeForm';
 import { ReportUploader, openReportFile } from '../../components/ui/ReportUploader';
 import { SearchableSelect } from '../../components/ui/SearchableSelect';
+import { Input } from '../../components/ui';
+import { parseClinicalTranscript } from '../../utils/helpers';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
@@ -109,9 +111,21 @@ function Modal({ title, onClose, children, wide, closeOnBackdrop = true }) {
   return (
     <div
       onMouseDown={closeOnBackdrop ? (e) => { if (e.target === e.currentTarget) onClose?.(); } : undefined}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      className="hv-modal-backdrop-anim"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--hv-backdrop-bg)',
+        backdropFilter: 'blur(var(--hv-backdrop-blur))',
+        WebkitBackdropFilter: 'blur(var(--hv-backdrop-blur))',
+        zIndex: 300,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16
+      }}
     >
-      <div onMouseDown={e => e.stopPropagation()} style={{ background: C.white, borderRadius: 16, width: '100%', maxWidth: wide ? 700 : 520, maxHeight: '92vh', overflowY: 'auto', padding: 28 }}>
+      <div onMouseDown={e => e.stopPropagation()} className="hv-modal-card-anim" style={{ background: C.white, borderRadius: 16, width: '100%', maxWidth: wide ? 700 : 520, maxHeight: '85vh', overflowY: 'auto', padding: 28, boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ color: C.primary, fontSize: 17, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: 22 }}>×</button>
@@ -220,6 +234,86 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose, initial = {}, sub
   const [error,   setError]   = useState('');
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
+  const [showSmartScribe, setShowSmartScribe] = useState(false);
+  const [scribeTranscript, setScribeTranscript] = useState('');
+  const [scribeListening, setScribeListening] = useState(false);
+  const [scribeExtracted, setScribeExtracted] = useState(false);
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  useEffect(() => {
+    return () => {
+      if (window.hvScribeRecognizer) {
+        try { window.hvScribeRecognizer.stop(); } catch (_) {}
+      }
+    };
+  }, []);
+
+  const toggleScribeListening = () => {
+    if (!SpeechRecognition) return;
+
+    if (scribeListening) {
+      if (window.hvScribeRecognizer) {
+        try { window.hvScribeRecognizer.stop(); } catch (_) {}
+      }
+      setScribeListening(false);
+      return;
+    }
+
+    try {
+      const recognizer = new SpeechRecognition();
+      recognizer.continuous = true;
+      recognizer.interimResults = true;
+      recognizer.lang = 'en-IN';
+
+      recognizer.onstart = () => {
+        setScribeListening(true);
+      };
+
+      recognizer.onresult = (event) => {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
+          }
+        }
+        if (finalTranscript) {
+          setScribeTranscript(prev => (prev ? `${prev.trim()} ${finalTranscript.trim()}` : finalTranscript.trim()));
+        }
+      };
+
+      recognizer.onerror = (e) => {
+        console.error('Scribe recognition error:', e);
+        setScribeListening(false);
+      };
+
+      recognizer.onend = () => {
+        setScribeListening(false);
+      };
+
+      window.hvScribeRecognizer = recognizer;
+      recognizer.start();
+    } catch (err) {
+      console.error('Failed starting conversation recorder:', err);
+      setScribeListening(false);
+    }
+  };
+
+  const handleExtractScribe = () => {
+    if (!scribeTranscript.trim()) return;
+    const parsed = parseClinicalTranscript(scribeTranscript);
+    setForm(prev => ({
+      ...prev,
+      chiefComplaint: parsed.chiefComplaint || prev.chiefComplaint,
+      diagnosis: parsed.diagnosis || prev.diagnosis,
+      testsPrescribed: parsed.testsPrescribed || prev.testsPrescribed,
+      prescription: parsed.prescription || prev.prescription,
+      notes: parsed.notes || prev.notes
+    }));
+    setScribeExtracted(true);
+    setTimeout(() => setScribeExtracted(false), 2000);
+  };
+
   const handleSubmit = async e => {
     e.preventDefault();
     if (!form.doctorProfileId) { setError('Select a doctor profile'); return; }
@@ -245,6 +339,127 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose, initial = {}, sub
   return (
     <form onSubmit={handleSubmit}>
       <p style={{ color: C.muted, fontSize: 13, marginBottom: 16 }}>{isEdit ? 'Editing visit for' : 'Recording visit for'} <strong style={{ color: C.primary }}>{patient.name}</strong></p>
+
+      {/* ── Smart Conversation AI Scribe Panel ── */}
+      <div 
+        className="hv-glass-panel" 
+        style={{ 
+          borderRadius: 12, 
+          padding: 14, 
+          marginBottom: 18, 
+          border: '1px solid var(--hv-border)',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
+        }}
+      >
+        <div 
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+          onClick={() => setShowSmartScribe(!showSmartScribe)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--hv-secondary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+            </svg>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--hv-primary)' }}>
+              Smart Clinical Conversation Scribe
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>
+            {showSmartScribe ? 'Hide Scribe' : 'Show Scribe'}
+          </span>
+        </div>
+
+        {showSmartScribe && (
+          <div className="fade-in" style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.4, margin: 0 }}>
+              Record or paste the full doctor-patient consultation. Our client-side clinical parser will instantly populate Chief Complaint, Diagnosis, Tests, Prescriptions, and Notes.
+            </p>
+            <textarea
+              style={{
+                width: '100%',
+                minHeight: 100,
+                padding: 10,
+                borderRadius: 8,
+                border: '1px solid var(--hv-border)',
+                background: 'var(--hv-surface)',
+                color: 'var(--hv-text)',
+                fontSize: 12,
+                fontFamily: 'Inter',
+                resize: 'vertical',
+                outline: 'none'
+              }}
+              value={scribeTranscript}
+              onChange={e => setScribeTranscript(e.target.value)}
+              placeholder="Paste dialogue transcript here, or click the mic below to start recording live consultation conversation..."
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {SpeechRecognition ? (
+                  <button
+                    type="button"
+                    onClick={toggleScribeListening}
+                    className={`hv-scribe-btn ${scribeListening ? 'hv-mic-active' : ''}`}
+                    style={{
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      gap: 6,
+                      background: scribeListening ? 'var(--hv-critical-soft)' : 'var(--hv-surface)',
+                      color: scribeListening ? 'var(--hv-critical)' : C.primary,
+                      border: `1px solid ${scribeListening ? 'var(--hv-critical)' : 'var(--hv-border)'}`
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    </svg>
+                    {scribeListening ? 'Listening...' : 'Record Conversation'}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 11, color: C.muted }}>Speech Recognition not supported in this browser.</span>
+                )}
+                {scribeTranscript && (
+                  <button
+                    type="button"
+                    onClick={() => { setScribeTranscript(''); setScribeListening(false); }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: C.muted,
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      fontWeight: 500
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleExtractScribe}
+                disabled={!scribeTranscript.trim()}
+                style={{
+                  ...btnPrimary,
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  background: scribeExtracted ? 'var(--hv-success)' : 'var(--hv-secondary)',
+                  opacity: scribeTranscript.trim() ? 1 : 0.6
+                }}
+              >
+                {scribeExtracted ? '✓ Extracted & Filled!' : 'Extract & Populate Form'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <Field label="Doctor Profile *">
         <SearchableSelect
           value={form.doctorProfileId}
@@ -261,25 +476,25 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose, initial = {}, sub
         <Field label="Follow-up Date">
           <input style={{ ...inputStyle, opacity: isEdit ? 0.6 : 1 }} type="date" value={form.followUpDate} onChange={set('followUpDate')} disabled={isEdit} />
         </Field>
-        <Field label="Weight (kg)">
-          <input style={inputStyle} type="number" min="0" step="0.1" value={form.weight} onChange={set('weight')} placeholder="e.g. 72.5" />
-        </Field>
+        <div style={{ gridColumn: '1/2', marginBottom: 14 }}>
+          <Input label="Weight (kg)" type="number" value={form.weight} onChange={set('weight')} placeholder="e.g. 72.5" numeric />
+        </div>
       </div>
-      <Field label="Chief Complaint *">
-        <input style={inputStyle} value={form.chiefComplaint} onChange={set('chiefComplaint')} placeholder="Fever, headache, etc." required />
-      </Field>
-      <Field label="Diagnosis">
-        <input style={inputStyle} value={form.diagnosis} onChange={set('diagnosis')} placeholder="ICD-10 code or description" />
-      </Field>
-      <Field label="Tests Prescribed">
-        <input style={inputStyle} value={form.testsPrescribed} onChange={set('testsPrescribed')} placeholder="CBC, X-ray chest…" />
-      </Field>
-      <Field label="Prescription">
-        <textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} value={form.prescription} onChange={set('prescription')} placeholder="Medications, dosage…" />
-      </Field>
-      <Field label="Notes">
-        <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} value={form.notes} onChange={set('notes')} placeholder="Additional observations…" />
-      </Field>
+      <div style={{ marginBottom: 14 }}>
+        <Input label="Chief Complaint *" value={form.chiefComplaint} onChange={set('chiefComplaint')} placeholder="Fever, headache, etc." required voice />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <Input label="Diagnosis" value={form.diagnosis} onChange={set('diagnosis')} placeholder="ICD-10 code or description" voice />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <Input label="Tests Prescribed" value={form.testsPrescribed} onChange={set('testsPrescribed')} placeholder="CBC, X-ray chest…" voice />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <Input label="Prescription" multiline rows={3} value={form.prescription} onChange={set('prescription')} placeholder="Medications, dosage…" voice />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <Input label="Notes" multiline rows={2} value={form.notes} onChange={set('notes')} placeholder="Additional observations…" voice />
+      </div>
       <Field label="Reports">
         <ReportUploader reports={reports} setReports={setReports} />
       </Field>
@@ -303,6 +518,18 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
   const [editVisit,   setEditVisit]   = useState(null);   // a visit being edited (within 12h)
   const [reqStatus,   setReqStatus]   = useState('idle'); // idle | sending | sent | error
   const [reqMsg,      setReqMsg]      = useState('');
+  const [expandedVisits, setExpandedVisits] = useState({});
+
+  useEffect(() => {
+    if (patient.visits && patient.visits.length > 0) {
+      const sorted = [...patient.visits].sort((a, b) => new Date(b.date) - new Date(a.date));
+      if (sorted[0]) {
+        setExpandedVisits({ [sorted[0].id]: true });
+      }
+    } else {
+      setExpandedVisits({});
+    }
+  }, [patient.id, patient.visits]);
 
   // A visit may be edited only within 12 hours of creation (and with write access).
   const editableVisit = (v) =>
@@ -327,7 +554,8 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
   };
 
   return (
-    <Modal title={patient.name} onClose={onClose} wide closeOnBackdrop>
+    <>
+      <Modal title={patient.name} onClose={onClose} wide closeOnBackdrop>
       {/* Patient header */}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ width: 52, height: 52, borderRadius: '50%', background: `${C.secondary}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -392,41 +620,160 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
       </div>
 
       {tab === 'visits' && (
-        <div>
+        <div style={{ position: 'relative', paddingLeft: 24, marginTop: 12 }}>
           {(patient.visits?.length ?? 0) === 0 ? (
             <p style={{ color: C.muted, fontSize: 13, padding: '16px 0' }}>No visits recorded yet.</p>
-          ) : [...(patient.visits ?? [])].sort((a, b) => new Date(b.date) - new Date(a.date)).map(v => (
-            <div key={v.id} style={{ padding: '14px 0', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: C.primary }}>
-                  {new Date(v.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {v.doctorProfile?.name && <span style={{ fontSize: 12, color: C.secondary }}>{v.doctorProfile.name}</span>}
-                  {editableVisit(v) && (
-                    <button type="button" onClick={() => setEditVisit(v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.secondary, fontSize: 12, fontWeight: 600, padding: 0 }}>Edit</button>
-                  )}
-                </div>
-              </div>
-              {v.chiefComplaint  && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Complaint:</strong> {renderTextWithVitals(v.chiefComplaint)}</p>}
-              {(v.weight || v.weight === 0) && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Weight:</strong> {v.weight} kg</p>}
-              {v.diagnosis       && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Diagnosis:</strong> {renderTextWithVitals(v.diagnosis)}</p>}
-              {v.prescription    && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Rx:</strong> {renderTextWithVitals(v.prescription)}</p>}
-              {v.testsPrescribed && <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}><strong>Tests:</strong> {renderTextWithVitals(v.testsPrescribed)}</p>}
-              {Array.isArray(v.testReports) && v.testReports.length > 0 && (
-                <p style={{ fontSize: 13, color: C.text, marginBottom: 3 }}>
-                  <strong>Reports:</strong>{' '}
-                  {v.testReports.map((r, i) => (
-                    <span key={r.fileId ?? r.url ?? i}>
-                      {i > 0 && ', '}
-                      <a onClick={() => openReportFile(r)} style={{ color: C.secondary, cursor: 'pointer' }}>{r.reportType ?? r.name ?? `Report ${i + 1}`}</a>
-                    </span>
-                  ))}
-                </p>
-              )}
-              {v.notes           && <p style={{ fontSize: 12, color: C.muted }}>{renderTextWithVitals(v.notes)}</p>}
-            </div>
-          ))}
+          ) : (
+            <>
+              {/* Timeline vertical guide line */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 6,
+                  top: 10,
+                  bottom: 10,
+                  width: 2,
+                  background: 'var(--hv-border)',
+                  borderRadius: 1,
+                }}
+              />
+              {[...(patient.visits ?? [])].sort((a, b) => new Date(b.date) - new Date(a.date)).map(v => {
+                const isExpanded = !!expandedVisits[v.id];
+                const toggleExpand = () => setExpandedVisits(prev => ({ ...prev, [v.id]: !isExpanded }));
+
+                return (
+                  <div key={v.id} style={{ position: 'relative', marginBottom: 18 }}>
+                    {/* Timeline Node Dot */}
+                    <div
+                      onClick={toggleExpand}
+                      style={{
+                        position: 'absolute',
+                        left: -23,
+                        top: 14,
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        background: isExpanded ? 'var(--hv-primary)' : 'var(--hv-surface)',
+                        border: `2.5px solid ${isExpanded ? 'var(--hv-primary)' : 'var(--hv-border-strong)'}`,
+                        boxShadow: isExpanded ? '0 0 0 4px var(--hv-primary)22' : 'none',
+                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                        cursor: 'pointer',
+                        zIndex: 2,
+                      }}
+                    />
+
+                    {/* Collapsible Card */}
+                    <div
+                      className="hv-glass-panel hv-card-hover"
+                      style={{
+                        borderRadius: 10,
+                        padding: '12px 16px',
+                        boxShadow: '0 2px 8px rgba(16,24,40,0.04)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onClick={toggleExpand}
+                    >
+                      {/* Header row */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--hv-primary)' }}>
+                            {new Date(v.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                          {v.doctorProfile?.name && (
+                            <span style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>
+                              · {v.doctorProfile.name}
+                            </span>
+                          )}
+                          {!isExpanded && v.diagnosis && (
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: C.secondary,
+                              background: 'var(--hv-success-soft)',
+                              padding: '2px 8px',
+                              borderRadius: 4,
+                              maxWidth: 160,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              display: 'inline-block',
+                            }}>
+                              {v.diagnosis}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} onClick={e => e.stopPropagation()}>
+                          {editableVisit(v) && (
+                            <button
+                              type="button"
+                              onClick={() => setEditVisit(v)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.secondary, fontSize: 12, fontWeight: 600, padding: 0 }}
+                            >
+                              Edit
+                            </button>
+                          )}
+                          <button
+                            onClick={toggleExpand}
+                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: C.muted,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 4,
+                              transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                              transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expandable details content */}
+                      {isExpanded && (
+                        <div
+                          className="fade-in"
+                          style={{
+                            marginTop: 12,
+                            paddingTop: 12,
+                            borderTop: `1px solid var(--hv-border)`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                          }}
+                        >
+                          {v.chiefComplaint  && <p style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}><strong>Complaint:</strong> {renderTextWithVitals(v.chiefComplaint)}</p>}
+                          {(v.weight || v.weight === 0) && <p style={{ fontSize: 13, color: C.text }}><strong>Weight:</strong> {v.weight} kg</p>}
+                          {v.diagnosis       && <p style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}><strong>Diagnosis:</strong> {renderTextWithVitals(v.diagnosis)}</p>}
+                          {v.prescription    && <p style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}><strong>Rx:</strong> {renderTextWithVitals(v.prescription)}</p>}
+                          {v.testsPrescribed && <p style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}><strong>Tests:</strong> {renderTextWithVitals(v.testsPrescribed)}</p>}
+                          {Array.isArray(v.testReports) && v.testReports.length > 0 && (
+                            <p style={{ fontSize: 13, color: C.text }}>
+                              <strong>Reports:</strong>{' '}
+                              {v.testReports.map((r, i) => (
+                                <span key={r.fileId ?? r.url ?? i}>
+                                  {i > 0 && ', '}
+                                  <a onClick={() => openReportFile(r)} style={{ color: C.secondary, cursor: 'pointer', textDecoration: 'underline' }}>{r.reportType ?? r.name ?? `Report ${i + 1}`}</a>
+                                </span>
+                              ))}
+                            </p>
+                          )}
+                          {v.notes           && <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, background: 'var(--hv-gray-50)', padding: 10, borderRadius: 6 }}>{renderTextWithVitals(v.notes)}</p>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
 
@@ -459,29 +806,31 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
         </div>
       )}
 
-      {showVisit && (
-        <Modal title="Record Visit" onClose={() => setShowVisit(false)}>
-          <VisitForm patient={patient} doctorProfiles={doctorProfiles} onSave={d => onAddVisit(patient.id, d)} onClose={() => setShowVisit(false)} />
-        </Modal>
-      )}
-      {showEdit && (
-        <Modal title="Edit Patient" onClose={() => setShowEdit(false)}>
-          <PatientForm initial={patient} onSave={d => onUpdatePatient(patient.id, d)} onClose={() => setShowEdit(false)} />
-        </Modal>
-      )}
-      {editVisit && (
-        <Modal title="Edit Visit" onClose={() => setEditVisit(null)}>
-          <VisitForm
-            patient={patient}
-            doctorProfiles={doctorProfiles}
-            initial={editVisit}
-            submitLabel="Save Changes"
-            onSave={d => onUpdateVisit(patient.id, editVisit.id, d)}
-            onClose={() => setEditVisit(null)}
-          />
-        </Modal>
-      )}
     </Modal>
+
+    {showVisit && (
+      <Modal title="Record Visit" onClose={() => setShowVisit(false)}>
+        <VisitForm patient={patient} doctorProfiles={doctorProfiles} onSave={d => onAddVisit(patient.id, d)} onClose={() => setShowVisit(false)} />
+      </Modal>
+    )}
+    {showEdit && (
+      <Modal title="Edit Patient" onClose={() => setShowEdit(false)}>
+        <PatientForm initial={patient} onSave={d => onUpdatePatient(patient.id, d)} onClose={() => setShowEdit(false)} />
+      </Modal>
+    )}
+    {editVisit && (
+      <Modal title="Edit Visit" onClose={() => setEditVisit(null)}>
+        <VisitForm
+          patient={patient}
+          doctorProfiles={doctorProfiles}
+          initial={editVisit}
+          submitLabel="Save Changes"
+          onSave={d => onUpdateVisit(patient.id, editVisit.id, d)}
+          onClose={() => setEditVisit(null)}
+        />
+      </Modal>
+    )}
+  </>
   );
 }
 

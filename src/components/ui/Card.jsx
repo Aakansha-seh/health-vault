@@ -7,12 +7,10 @@ import { C, shadows, radii } from '../../constants/theme';
 export function Card({ children, style, interactive = false }) {
   return (
     <div
-      className={interactive ? "hv-card-hover" : ""}
+      className={`${interactive ? "hv-card-hover" : ""} hv-glass-panel`}
       style={{
-        background:   C.surface,
         borderRadius: radii.lg,
         boxShadow:    shadows.xs,
-        border:       `1px solid ${C.border}`,
         ...style,
       }}
     >

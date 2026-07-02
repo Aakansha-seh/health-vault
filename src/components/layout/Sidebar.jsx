@@ -12,9 +12,13 @@ const NAV_CONFIG = {
   audit:       { label: 'Audit Log',       icon: 'audit' },
   patients:    { label: 'Patients',        icon: 'patients' },
   appointments:{ label: 'Appointments',    icon: 'calendar' },
-  ai:          { label: 'AI Summary',      icon: 'ai' },
-  subscription:{ label: 'Subscription',    icon: 'subscription' },
+  ai:          {label: 'AI Summary',      icon: 'ai' },
+  subscription:{label: 'Subscription',    icon: 'subscription' },
 };
+
+// ── Google Feedback Form URL ──────────────────────────────────────────────────
+// Swap this URL with your live Google Forms questionnaire link.
+const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScE87vKLK9Gug6aEJK6b_aKT00LzapNnSV88vFAZq2f-0J4uw/viewform?usp=publish-editor';
 
 // ── Inline SVG icons ──────────────────────────────────────────────────────────
 
@@ -113,17 +117,18 @@ export function Sidebar({ actor, view, setView, navViews, onLogout, isOpen, onTo
         .hv-logout-btn:hover { background: ${C.bg} !important; }
       `}</style>
 
-      <aside style={{
-        position: 'fixed', left: 0, top: 0, bottom: 0,
-        width: W,
-        background: C.white,
-        borderRight: `1px solid ${C.border}`,
-        display: 'flex', flexDirection: 'column',
-        zIndex: 200,
-        boxShadow: '2px 0 16px rgba(0,0,0,0.06)',
-        transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
-        overflow: 'hidden',
-      }}>
+      <aside
+        className="hv-glass-panel"
+        style={{
+          position: 'fixed', left: 0, top: 0, bottom: 0,
+          width: W,
+          display: 'flex', flexDirection: 'column',
+          zIndex: 200,
+          boxShadow: '2px 0 16px rgba(0,0,0,0.06)',
+          transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
+          overflow: 'hidden',
+        }}
+      >
 
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <div style={{
@@ -235,6 +240,25 @@ export function Sidebar({ actor, view, setView, navViews, onLogout, isOpen, onTo
                 </div>
               </div>
 
+              {/* Google Form Feedback Review */}
+              <button
+                onClick={() => window.open(GOOGLE_FORM_URL, '_blank', 'noopener,noreferrer')}
+                className="hv-logout-btn"
+                style={{
+                  width: '100%', padding: '8px 0', borderRadius: 8,
+                  border: `1px solid ${C.border}`,
+                  cursor: 'pointer', background: 'transparent',
+                  color: C.primary, fontSize: 12, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  marginBottom: 8,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                Rate Portal
+              </button>
+
               {/* Night Mode Toggle */}
               <button
                 onClick={onToggleTheme}
@@ -282,6 +306,20 @@ export function Sidebar({ actor, view, setView, navViews, onLogout, isOpen, onTo
             </>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+              <button
+                onClick={() => window.open(GOOGLE_FORM_URL, '_blank', 'noopener,noreferrer')}
+                title="Rate Portal"
+                className="hv-logout-btn"
+                style={{
+                  width: '100%', padding: '9px 0', borderRadius: 8,
+                  border: 'none', cursor: 'pointer', background: 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </button>
               <button
                 onClick={onToggleTheme}
                 title={isDarkMode ? 'Light Mode' : 'Night Mode'}

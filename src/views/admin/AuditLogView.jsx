@@ -117,7 +117,13 @@ export function AuditLogView({ actor, logs: initialLogs }) {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: C.muted }}>Loading…</td></tr>
+              [1, 2, 3, 4, 5].map(i => (
+                <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
+                  <td colSpan={6} style={{ padding: '14px 14px' }}>
+                    <div className="hv-skeleton" style={{ height: 16, width: i % 2 === 0 ? '70%' : '85%', borderRadius: 4 }} />
+                  </td>
+                </tr>
+              ))
             ) : filtered.length === 0 ? (
               <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: C.muted }}>No audit entries found.</td></tr>
             ) : filtered.map(log => (

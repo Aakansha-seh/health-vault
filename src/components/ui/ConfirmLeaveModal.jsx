@@ -14,22 +14,24 @@ export function ConfirmLeaveModal({ open, onReturn, onDiscard }) {
     /* ── Backdrop ── */
     <div
       onClick={onReturn}
+      className="hv-modal-backdrop-anim"
       style={{
         position:   'fixed',
         inset:       0,
-        background: 'rgba(15,23,42,.45)',
+        background: 'var(--hv-backdrop-bg)',
         display:    'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex:     1000,
         padding:    16,
-        backdropFilter: 'blur(2px)',
+        backdropFilter: 'blur(var(--hv-backdrop-blur))',
+        WebkitBackdropFilter: 'blur(var(--hv-backdrop-blur))',
       }}
     >
       {/* ── Card ── */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="fade-in"
+        className="hv-modal-card-anim"
         style={{
           background:   '#fff',
           borderRadius: 14,
@@ -38,6 +40,7 @@ export function ConfirmLeaveModal({ open, onReturn, onDiscard }) {
           width:        '100%',
           maxWidth:     400,
           fontFamily:   'Inter',
+          boxSizing:    'border-box',
         }}
       >
         {/* Icon */}
