@@ -33,7 +33,8 @@ api.interceptors.response.use(
   (err) => {
     const url   = err.config?.url ?? '';
     const status = err.response?.status;
-    const isAuthAttempt = url.includes('/auth/login') || url.includes('/auth/admin/login');
+    const isAuthAttempt = url.includes('/auth/login') || url.includes('/auth/admin/login')
+      || url.includes('/portal/login') || url.includes('/portal/change-password');
 
     const serverError = err.response?.data?.error;
     const details     = err.response?.data?.details;
@@ -67,8 +68,14 @@ export default api;
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
 export const setToken   = (t) => localStorage.setItem(TOKEN_KEY, t);
-export const clearToken = ()  => localStorage.removeItem(TOKEN_KEY);
+export const clearToken = ()  => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(ACTOR_TYPE_KEY); };
 export const getToken   = ()  => localStorage.getItem(TOKEN_KEY);
+
+// Remembers which KIND of session is stored so a refresh knows whether to call
+// /auth/me (staff) or /portal/me (patient).
+const ACTOR_TYPE_KEY = 'hv_actor_type';
+export const setActorType = (t) => localStorage.setItem(ACTOR_TYPE_KEY, t);
+export const getActorType = ()  => localStorage.getItem(ACTOR_TYPE_KEY);
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -264,6 +271,52 @@ export const generateAISummary = (body) => api.post('/ai/summary', body).then(r 
 /** POST /patients/:id/ai-summary → save a summary onto the patient's record */
 export const saveAISummary = (patientId, body) =>
   api.post(`/patients/${patientId}/ai-summary`, body).then(r => r.data);
+
+// ── Patient portal ────────────────────────────────────────────────────────────
+
+/** POST /portal/login → { token, actor } */
+export const patientLogin = (body) => api.post('/portal/login', body).then(r => r.data);
+
+/** GET /portal/me → { type:'patient', patient, hospital, mustChangePassword } */
+export const portalMe = () => api.get('/portal/me').then(r => r.data);
+
+/** POST /portal/change-password — { currentPassword, newPassword } */
+export const portalChangePassword = (body) => api.post('/portal/change-password', body).then(r => r.data);
+
+/** POST /portal/logout */
+export const portalLogout = () => api.post('/portal/logout').then(r => r.data);
+
+/** GET /portal/visits — the patient's own visit history (read-only) */
+export const getPortalVisits = () => api.get('/portal/visits').then(r => r.data);
+
+/** GET /portal/appointments */
+export const getPortalAppointments = () => api.get('/portal/appointments').then(r => r.data);
+
+/** GET /portal/files — documents the patient has uploaded */
+export const getPortalFiles = () => api.get('/portal/files').then(r => r.data);
+
+/** POST /portal/uploads — patient uploads a previous record (base64) */
+export const uploadPortalFile = async (file, reportType) => {
+  const contentType = file.type || 'application/octet-stream';
+  const dataBase64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Could not read the selected file'));
+    reader.readAsDataURL(file);
+  });
+  const { data } = await api.post('/portal/uploads', {
+    fileName: file.name, contentType, dataBase64, reportType: reportType || undefined,
+  });
+  return data; // { id, fileName, type, reportType, createdAt }
+};
+
+/** POST /patients/:id/invite — email portal credentials to the patient (staff) */
+export const invitePatient = (patientId, body = {}) =>
+  api.post(`/patients/${patientId}/invite`, body).then(r => r.data);
+
+/** POST /patients/:id/portal-access — { active } revoke/restore portal login (staff) */
+export const setPatientPortalAccess = (patientId, active) =>
+  api.post(`/patients/${patientId}/portal-access`, { active }).then(r => r.data);
 
 // ── Subscriptions ─────────────────────────────────────────────────────────────
 

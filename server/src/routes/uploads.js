@@ -14,11 +14,44 @@ import { Router } from 'express';
 import fs from 'fs';
 import zlib from 'zlib';
 import { z } from 'zod';
+import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma.js';
-import { authenticate, authenticateCredential } from '../middleware/auth.js';
+import { authenticate, authenticateCredential, authenticatePatient } from '../middleware/auth.js';
 import { saveBase64File, resolveStored, mimeForId, storageConfigured } from '../lib/storage.js';
 
 const router = Router();
+
+// Accepts admin, credential, OR patient tokens (the /file route serves all three).
+function authenticateAny(req, res, next) {
+  const h = req.headers.authorization;
+  const token = h?.startsWith('Bearer ') ? h.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+  let payload;
+  try { payload = jwt.verify(token, process.env.JWT_SECRET); }
+  catch { return res.status(401).json({ error: 'Invalid token' }); }
+  if (payload.type === 'patient') return authenticatePatient(req, res, next);
+  return authenticate(req, res, next);
+}
+
+// May this patient see this file? True when the file is their own upload, or
+// when it appears in the testReports of one of THEIR visits (staff-uploaded
+// reports are matched by attachment id or stored name inside the saved URL).
+async function patientCanReadFile(actor, fileId, attachment) {
+  if (attachment?.patientId === actor.patientId) return true;
+  const visits = await prisma.visit.findMany({
+    where:  { patientId: actor.patientId },
+    select: { testReports: true },
+  });
+  const ids = new Set([fileId, attachment?.storedName].filter(Boolean));
+  for (const v of visits) {
+    if (!Array.isArray(v.testReports)) continue;
+    for (const r of v.testReports) {
+      const tail = String(r?.url ?? '').split('/').pop();
+      if (ids.has(tail) || ids.has(String(r?.fileId ?? ''))) return true;
+    }
+  }
+  return false;
+}
 
 // Lets the UI know uploads are available.
 router.get('/config', authenticateCredential, (_req, res) => {
@@ -66,9 +99,21 @@ router.post('/', authenticateCredential, async (req, res, next) => {
 // Serve a file to an authenticated caller from the owning hospital.
 // Files are stored gzip-compressed; browsers that accept gzip get the compressed
 // bytes and decompress transparently (less bandwidth, no server CPU).
-router.get('/file/:id', authenticate, async (req, res) => {
+router.get('/file/:id', authenticateAny, async (req, res) => {
   try {
     const attachment = await prisma.attachment.findUnique({ where: { id: req.params.id } });
+
+    // Patients may ONLY read files that belong to their own record — their own
+    // uploads or reports attached to their own visits. Hospital-wide access
+    // would let one patient read another's reports.
+    if (req.actor.type === 'patient') {
+      if (attachment && attachment.hospitalId !== req.actor.hospitalId) {
+        return res.status(403).json({ error: 'You do not have access to this file' });
+      }
+      if (!(await patientCanReadFile(req.actor, req.params.id, attachment))) {
+        return res.status(403).json({ error: 'You do not have access to this file' });
+      }
+    }
 
     let storedName, mime;
     if (attachment) {
