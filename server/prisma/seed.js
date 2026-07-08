@@ -1,5 +1,5 @@
-// HealthVault Seed Script — clinics + demo doctors only
-// Patients, visits, appointments are NOT seeded so new signups start fresh.
+// HealthVault Seed Script — hospitals + admins + demo doctor credentials/profiles
+// Patients, visits, appointments are NOT seeded so new hospitals start fresh.
 // Run: node prisma/seed.js  (from server/ directory)
 
 import { PrismaClient } from '@prisma/client';
@@ -11,17 +11,25 @@ async function main() {
   console.log('🌱  Seeding HealthVault database...');
 
   // ── Clean slate ────────────────────────────────────────────────────────────
+  // Delete in FK-safe order (children before parents)
   await prisma.auditLog.deleteMany();
-  await prisma.appointment.deleteMany();
+  await prisma.aIUsage.deleteMany();
   await prisma.visit.deleteMany();
+  await prisma.appointment.deleteMany();
+  await prisma.profileAccess.deleteMany();
+  await prisma.permissionRequest.deleteMany();
+  await prisma.subscription.deleteMany();
+  await prisma.patientAccount.deleteMany();
   await prisma.patient.deleteMany();
-  await prisma.doctor.deleteMany();
-  await prisma.clinic.deleteMany();
+  await prisma.doctorProfile.deleteMany();
+  await prisma.credential.deleteMany();
+  await prisma.admin.deleteMany();
+  await prisma.hospital.deleteMany();
 
   const passwordHash = await bcrypt.hash('MediRecord@2025', 12);
 
-  // ── Clinics ────────────────────────────────────────────────────────────────
-  await prisma.clinic.create({
+  // ── 1. Create Hospitals (Clinics) ──────────────────────────────────────────
+  await prisma.hospital.create({
     data: {
       id:      'c1',
       name:    'HealthVault Clinic — Delhi',
@@ -31,7 +39,7 @@ async function main() {
     },
   });
 
-  await prisma.clinic.create({
+  await prisma.hospital.create({
     data: {
       id:      'c2',
       name:    'HealthVault Wellness — Mumbai',
@@ -41,57 +49,172 @@ async function main() {
     },
   });
 
-  console.log('✅  Clinics created');
+  console.log('✅  Hospitals created');
 
-  // ── Demo doctors (for testing — remove in production) ─────────────────────
-  await prisma.doctor.create({
+  // ── 2. Create Hospital Administrators ───────────────────────────────────────
+  await prisma.admin.create({
     data: {
-      id:             'd1',
+      id:           'admin_delhi',
+      name:         'Delhi Clinic Admin',
+      email:        'admin@healthvault.in',
+      passwordHash: passwordHash,
+      hospitalId:   'c1',
+    },
+  });
+
+  await prisma.admin.create({
+    data: {
+      id:           'admin_mumbai',
+      name:         'Mumbai Clinic Admin',
+      email:        'mumbai-admin@healthvault.in',
+      passwordHash: passwordHash,
+      hospitalId:   'c2',
+    },
+  });
+
+  console.log('✅  Administrators created');
+
+  // ── 3. Create Doctor Logins (Credentials) ──────────────────────────────────
+  await prisma.credential.create({
+    data: {
+      id:           'cred_aakansha',
+      label:         'Dr. Aakansha Singh',
+      username:     'aakansha',
+      passwordHash: passwordHash,
+      role:         'DOCTOR',
+      isActive:     true,
+      hospitalId:   'c1',
+      createdBy:    'admin_delhi',
+    },
+  });
+
+  await prisma.credential.create({
+    data: {
+      id:           'cred_rohan',
+      label:         'Dr. Rohan Mehta',
+      username:     'rohan',
+      passwordHash: passwordHash,
+      role:         'DOCTOR',
+      isActive:     true,
+      hospitalId:   'c1',
+      createdBy:    'admin_delhi',
+    },
+  });
+
+  await prisma.credential.create({
+    data: {
+      id:           'cred_priyanka',
+      label:         'Dr. Priyanka Sharma',
+      username:     'priyanka',
+      passwordHash: passwordHash,
+      role:         'DOCTOR',
+      isActive:     true,
+      hospitalId:   'c2',
+      createdBy:    'admin_mumbai',
+    },
+  });
+
+  console.log('✅  Doctor credentials created');
+
+  // ── 4. Create Doctor Clinical Profiles ─────────────────────────────────────
+  await prisma.doctorProfile.create({
+    data: {
+      id:             'dp_aakansha',
       name:           'Dr. Aakansha Singh',
-      email:          'aakansha@healthvault.in',
-      password:       passwordHash,
-      specialisation: 'General Physician & Internal Medicine',
-      contact:        '+91 98100 00001',
-      clinicHours:    'Mon–Sat 9:00 AM – 6:00 PM',
-      yearsPractice:  8,
-      clinicId:       'c1',
+      specialty:      'General Physician & Internal Medicine',
+      phone:          '+91 98100 00001',
+      hospitalId:     'c1',
     },
   });
 
-  await prisma.doctor.create({
+  await prisma.doctorProfile.create({
     data: {
-      id:             'd2',
+      id:             'dp_rohan',
       name:           'Dr. Rohan Mehta',
-      email:          'rohan@healthvault.in',
-      password:       passwordHash,
-      specialisation: 'Cardiologist',
-      contact:        '+91 98100 00002',
-      clinicHours:    'Mon–Fri 10:00 AM – 5:00 PM',
-      yearsPractice:  12,
-      clinicId:       'c1',
+      specialty:      'Cardiologist',
+      phone:          '+91 98100 00002',
+      hospitalId:     'c1',
     },
   });
 
-  await prisma.doctor.create({
+  await prisma.doctorProfile.create({
     data: {
-      id:             'd3',
+      id:             'dp_priyanka',
       name:           'Dr. Priyanka Sharma',
-      email:          'priyanka@healthvault.in',
-      password:       passwordHash,
-      specialisation: 'Gynaecologist',
-      contact:        '+91 98100 00003',
-      clinicHours:    'Tue–Sat 9:00 AM – 4:00 PM',
-      yearsPractice:  10,
-      clinicId:       'c2',
+      specialty:      'Gynaecologist',
+      phone:          '+91 98100 00003',
+      hospitalId:     'c2',
     },
   });
 
-  console.log('✅  Demo doctors created');
+  console.log('✅  Doctor clinical profiles created');
+
+  // ── 5. Grant Profile Access Permissions ────────────────────────────────────
+  await prisma.profileAccess.create({
+    data: {
+      credentialId:    'cred_aakansha',
+      doctorProfileId: 'dp_aakansha',
+      permission:      'READ_WRITE',
+      grantedBy:       'admin_delhi',
+    },
+  });
+
+  await prisma.profileAccess.create({
+    data: {
+      credentialId:    'cred_rohan',
+      doctorProfileId: 'dp_rohan',
+      permission:      'READ_WRITE',
+      grantedBy:       'admin_delhi',
+    },
+  });
+
+  await prisma.profileAccess.create({
+    data: {
+      credentialId:    'cred_priyanka',
+      doctorProfileId: 'dp_priyanka',
+      permission:      'READ_WRITE',
+      grantedBy:       'admin_mumbai',
+    },
+  });
+
+  console.log('✅  Doctor permissions granted');
+
+  // ── 6. Create Receptionist Accounts (Optional) ─────────────────────────────
+  await prisma.credential.create({
+    data: {
+      id:           'cred_receptionist_delhi',
+      label:         'Delhi Front Desk',
+      username:     'receptionist_delhi',
+      passwordHash: passwordHash,
+      role:         'RECEPTIONIST',
+      isActive:     true,
+      hospitalId:   'c1',
+      createdBy:    'admin_delhi',
+    },
+  });
+
+  await prisma.credential.create({
+    data: {
+      id:           'cred_receptionist_mumbai',
+      label:         'Mumbai Front Desk',
+      username:     'receptionist_mumbai',
+      passwordHash: passwordHash,
+      role:         'RECEPTIONIST',
+      isActive:     true,
+      hospitalId:   'c2',
+      createdBy:    'admin_mumbai',
+    },
+  });
+
+  console.log('✅  Receptionist credentials created');
+
   console.log('\n🎉  Seed complete! No patient data seeded — new users start fresh.');
   console.log('\nDemo login credentials (password: MediRecord@2025):');
-  console.log('  aakansha@healthvault.in  — Delhi clinic');
-  console.log('  rohan@healthvault.in     — Delhi clinic');
-  console.log('  priyanka@healthvault.in  — Mumbai clinic');
+  console.log('  Admin (Delhi):     admin@healthvault.in');
+  console.log('  Doctor (Delhi):    aakansha   (username)');
+  console.log('  Doctor (Delhi):    rohan      (username)');
+  console.log('  Doctor (Mumbai):   priyanka   (username)');
+  console.log('  Receptionist (DL): receptionist_delhi (username)');
 }
 
 main()

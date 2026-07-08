@@ -57,6 +57,12 @@ enum SubscriptionStatus {
   TRIALING
 }
 
+// Who uploaded an Attachment — hospital staff or the patient themselves.
+enum AttachmentSource {
+  STAFF
+  PATIENT
+}
+
 enum AuditAction {
   // ── Auth ──────────────────────────────────────────────────────────────────
   ADMIN_LOGIN
@@ -104,6 +110,15 @@ enum AuditAction {
 
   // ── Profile ───────────────────────────────────────────────────────────────
   DOCTOR_PROFILE_UPDATED
+
+  // ── Patient portal ────────────────────────────────────────────────────────
+  PATIENT_INVITED
+  PATIENT_LOGIN
+  PATIENT_LOGOUT
+  PATIENT_PASSWORD_CHANGED
+  PATIENT_FILE_UPLOADED
+  PATIENT_ACCESS_REVOKED
+  PATIENT_ACCESS_REACTIVATED
 }
 
 // ─── Models ──────────────────────────────────────────────────────────────────
@@ -119,12 +134,13 @@ model Hospital {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  admins         Admin[]
-  credentials    Credential[]
-  doctorProfiles DoctorProfile[]
-  patients       Patient[]
-  appointments   Appointment[]
-  auditLogs      AuditLog[]
+  admins          Admin[]
+  credentials     Credential[]
+  doctorProfiles  DoctorProfile[]
+  patients        Patient[]
+  appointments    Appointment[]
+  auditLogs       AuditLog[]
+  patientAccounts PatientAccount[]
 }
 
 // Hospital administrator — full access to the hospital's data.
@@ -269,9 +285,34 @@ model Patient {
   visits       Visit[]
   appointments Appointment[]
   aiUsages     AIUsage[]
+  account      PatientAccount?
+  attachments  Attachment[]
 
   @@index([hospitalId, createdAt])
   @@index([hospitalId, name])
+}
+
+// Patient portal login — auto-created when a patient is registered.
+// passwordHash stays NULL until staff presses "Invite": a temp password is then
+// generated, emailed to the patient, and its hash stored here. The patient must
+// change it on first login (mustChangePassword). isActive: false = access revoked.
+model PatientAccount {
+  id                 String    @id @default(cuid())
+  patientId          String    @unique
+  hospitalId         String
+  username           String    @unique
+  passwordHash       String?   // null until the patient has been invited
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(true)
+  invitedAt          DateTime? // last time invite credentials were emailed
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  hospital Hospital @relation(fields: [hospitalId], references: [id])
+
+  @@index([hospitalId])
 }
 
 // A clinical session record under a specific DoctorProfile.
@@ -398,12 +439,17 @@ model Attachment {
   id         String   @id @default(cuid())
   hospitalId String                 // owning hospital — enforced on download
   visitId    String?                // optional link to the visit it belongs to
+  patientId  String?                // set when the file belongs to / was uploaded by a patient
+  source     AttachmentSource @default(STAFF)
   storedName String                 // file on disk (uuid.ext), never exposed to clients
   fileName   String                 // original file name
   type       String                 // MIME type
   reportType String?                // category chosen in the UI (Prescription, …)
-  uploadedBy String                 // credentialId of the uploader
+  uploadedBy String?                // credentialId of the uploader (null for patient uploads)
   createdAt  DateTime @default(now())
 
+  patient Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
   @@index([hospitalId])
+  @@index([patientId])
 }
