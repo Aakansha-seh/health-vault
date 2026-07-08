@@ -5,6 +5,7 @@ import { ReportUploader, openReportFile } from '../../components/ui/ReportUpload
 import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { Input } from '../../components/ui';
 import { parseClinicalTranscript } from '../../utils/helpers';
+import { invitePatient, setPatientPortalAccess } from '../../services/api';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
@@ -509,6 +510,103 @@ function VisitForm({ patient, doctorProfiles, onSave, onClose, initial = {}, sub
   );
 }
 
+// ── Portal access panel (invite / revoke) ────────────────────────────────────
+
+function PortalAccessPanel({ patient }) {
+  const [account, setAccount] = useState(patient.account ?? null);
+  const [email,   setEmail]   = useState(patient.email ?? '');
+  const [busy,    setBusy]    = useState(false);
+  const [msg,     setMsg]     = useState(null);   // { ok: bool, text }
+
+  useEffect(() => {
+    setAccount(patient.account ?? null);
+    setEmail(patient.email ?? '');
+    setMsg(null);
+  }, [patient.id]);  // eslint-disable-line
+
+  const invited = !!account?.invitedAt;
+  const needsEmail = !patient.email;
+
+  const doInvite = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const res = await invitePatient(patient.id, needsEmail && email ? { email } : {});
+      setAccount(res.account);
+      setMsg({ ok: true, text: res.message });
+    } catch (e) {
+      setMsg({ ok: false, text: e.message || 'Could not send the invite' });
+    } finally { setBusy(false); }
+  };
+
+  const toggleAccess = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const res = await setPatientPortalAccess(patient.id, !account.isActive);
+      setAccount(res.account);
+      setMsg({ ok: true, text: res.account.isActive ? 'Portal access restored' : 'Portal access revoked' });
+    } catch (e) {
+      setMsg({ ok: false, text: e.message || 'Could not update portal access' });
+    } finally { setBusy(false); }
+  };
+
+  const statusChip = !account
+    ? { text: 'No portal account', bg: C.bg, color: C.muted }
+    : !account.isActive
+      ? { text: 'Portal revoked', bg: `${C.error}15`, color: C.error }
+      : !invited
+        ? { text: 'Not invited yet', bg: C.bg, color: C.muted }
+        : account.lastLoginAt
+          ? { text: 'Portal active', bg: `${C.secondary}15`, color: C.secondary }
+          : { text: 'Invited — not signed in yet', bg: `${C.secondary}10`, color: C.secondary };
+
+  return (
+    <div style={{ background: C.bg, borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.primary }}>Patient portal</span>
+        <span style={{ fontSize: 11, fontWeight: 600, background: statusChip.bg, color: statusChip.color, padding: '2px 10px', borderRadius: 99 }}>
+          {statusChip.text}
+        </span>
+        {account?.username && (
+          <span style={{ fontSize: 11, color: C.muted }}>@{account.username}</span>
+        )}
+        <span style={{ flex: 1 }} />
+        {(!account || account.isActive) && (
+          <button onClick={doInvite} disabled={busy || (needsEmail && !email)} style={{
+            padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.secondary}`,
+            background: 'transparent', color: C.secondary, cursor: 'pointer',
+            fontSize: 12, fontWeight: 600, opacity: busy ? 0.6 : 1,
+          }}>
+            {busy ? 'Sending…' : invited ? 'Resend invite' : 'Invite to HealthVault'}
+          </button>
+        )}
+        {account && invited && (
+          <button onClick={toggleAccess} disabled={busy} style={{
+            padding: '6px 12px', borderRadius: 8,
+            border: `1px solid ${account.isActive ? C.error : C.border}`,
+            background: 'transparent', color: account.isActive ? C.error : C.primary,
+            cursor: 'pointer', fontSize: 12, fontWeight: 600, opacity: busy ? 0.6 : 1,
+          }}>
+            {account.isActive ? 'Revoke access' : 'Restore access'}
+          </button>
+        )}
+      </div>
+      {needsEmail && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: C.muted }}>No email on file — add one to invite:</span>
+          <input
+            type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+            placeholder="patient@email.com"
+            style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 12, background: C.white, color: C.text }}
+          />
+        </div>
+      )}
+      {msg && (
+        <p style={{ fontSize: 11, color: msg.ok ? C.secondary : C.error, marginTop: 8 }}>{msg.text}</p>
+      )}
+    </div>
+  );
+}
+
 // ── Patient Detail ────────────────────────────────────────────────────────────
 
 function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdateVisit, onUpdatePatient, onRequestAccess, onClose }) {
@@ -606,18 +704,49 @@ function PatientDetail({ patient, doctorProfiles, canWrite, onAddVisit, onUpdate
         </div>
       )}
 
+      {/* Portal access (invite / revoke) */}
+      <PortalAccessPanel patient={patient} />
+
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-        {['visits', 'info', ...(patient.aiSummary ? ['ai'] : [])].map(t => (
+      <div style={{ display: 'flex', gap: 4, marginBottom: 14, flexWrap: 'wrap' }}>
+        {['visits', 'info', ...(patient.attachments?.length ? ['docs'] : []), ...(patient.aiSummary ? ['ai'] : [])].map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
             background: tab === t ? C.primary : C.bg,
             color: tab === t ? C.white : C.muted, fontSize: 13, fontWeight: tab === t ? 600 : 400,
           }}>
-            {t === 'visits' ? `Visits (${patient.visits?.length ?? 0})` : t === 'ai' ? 'AI Summary' : 'Info'}
+            {t === 'visits' ? `Visits (${patient.visits?.length ?? 0})`
+              : t === 'ai' ? 'AI Summary'
+              : t === 'docs' ? `Patient files (${patient.attachments?.length ?? 0})`
+              : 'Info'}
           </button>
         ))}
       </div>
+
+      {tab === 'docs' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+            Documents uploaded by the patient from their portal.
+          </p>
+          {(patient.attachments ?? []).map(f => (
+            <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: `1px solid ${C.border}`, borderRadius: 8, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.fileName}</p>
+                <p style={{ fontSize: 11, color: C.muted }}>
+                  {f.reportType ? `${f.reportType} · ` : ''}
+                  {new Date(f.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </p>
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.secondary, background: `${C.secondary}15`, padding: '2px 8px', borderRadius: 99, whiteSpace: 'nowrap' }}>
+                Uploaded by patient
+              </span>
+              <a onClick={() => openReportFile({ fileId: f.id, name: f.fileName })} style={{ color: C.secondary, cursor: 'pointer', textDecoration: 'underline', fontSize: 12, fontWeight: 600 }}>
+                Open
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
 
       {tab === 'visits' && (
         <div style={{ position: 'relative', paddingLeft: 24, marginTop: 12 }}>

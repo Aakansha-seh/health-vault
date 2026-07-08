@@ -23,6 +23,7 @@ import aiRouter               from './routes/ai.js';
 import subscriptionsRouter    from './routes/subscriptions.js';
 import webhooksRouter         from './routes/webhooks.js';
 import uploadsRouter          from './routes/uploads.js';
+import portalRouter           from './routes/portal.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -75,6 +76,7 @@ app.use('/api/dashboard',           dashboardRouter);
 app.use('/api/ai',                  aiRouter);
 app.use('/api/subscriptions',       subscriptionsRouter);
 app.use('/api/uploads',             uploadsRouter);
+app.use('/api/portal',              portalRouter);
 
 // 404 catch-all
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));

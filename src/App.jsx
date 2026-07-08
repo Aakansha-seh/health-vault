@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 
 import {
-  getMe, getToken, clearToken, setToken,
+  getMe, getToken, clearToken, setToken, setActorType, getActorType,
+  portalMe, portalLogout,
   credentialLogin, adminLogin, logout as apiLogout,
   getPatients, addPatient as apiAddPatient, updatePatient as apiUpdatePatient, createPatientIntake as apiCreateIntake,
   addVisit as apiAddVisit, updateVisit as apiUpdateVisit,
@@ -28,6 +29,7 @@ import { PatientsView }        from './views/shared/PatientsView';
 import { AppointmentsView }    from './views/shared/AppointmentsView';
 import { AISummaryView }       from './views/credential/AISummaryView';
 import { SubscriptionView }    from './views/credential/SubscriptionView';
+import { PatientPortal }       from './views/portal/PatientPortal';
 
 import { C } from './constants/theme';
 
@@ -241,8 +243,12 @@ export default function App() {
   useEffect(() => {
     const token = getToken();
     if (!token) { setAuthLoading(false); return; }
-    getMe()
-      .then(me => { setActor(me); return loadDataForActor(me); })
+    const restore = getActorType() === 'patient' ? portalMe() : getMe();
+    restore
+      .then(me => {
+        setActor(me);
+        if (me.type !== 'patient') return loadDataForActor(me);
+      })
       .catch(() => clearToken())
       .finally(() => setAuthLoading(false));
   }, []);  // eslint-disable-line
@@ -320,13 +326,18 @@ export default function App() {
 
   const handleLogin = useCallback(async ({ token, actor: me }) => {
     setToken(token);
+    setActorType(me.type);
     setActor(me);
+    if (me.type === 'patient') return;         // patient portal loads its own data
     await loadDataForActor(me);
     setView(defaultView(me));
   }, [loadDataForActor]);
 
   const handleLogout = useCallback(async () => {
-    try { await apiLogout(); } catch (_) {}
+    try {
+      if (getActorType() === 'patient') await portalLogout();
+      else await apiLogout();
+    } catch (_) {}
     clearToken();
     setActor(null);
     setPatients([]); setAppointments([]); setDoctorProfiles([]);
@@ -516,6 +527,20 @@ export default function App() {
       <>
         <GlobalStyle />
         <LoginScreen onLogin={handleLogin} onShowSetup={() => setShowSetup(true)} />
+      </>
+    );
+  }
+
+  // Patient portal — its own standalone shell, no staff sidebar/nav.
+  if (actor.type === 'patient') {
+    return (
+      <>
+        <GlobalStyle />
+        <PatientPortal
+          actor={actor}
+          onLogout={handleLogout}
+          onPasswordChanged={() => setActor(a => ({ ...a, mustChangePassword: false }))}
+        />
       </>
     );
   }

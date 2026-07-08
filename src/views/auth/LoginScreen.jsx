@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { adminLogin, credentialLogin } from '../../services/api';
+import { adminLogin, credentialLogin, patientLogin } from '../../services/api';
 import { C, shadow } from '../../constants/theme';
 import { Card, Input, Button } from '../../components/ui';
 
@@ -18,7 +18,9 @@ export function LoginScreen({ onLogin, onShowSetup }) {
     try {
       const data = tab === 'admin'
         ? await adminLogin({ email: form.identifier, password: form.password })
-        : await credentialLogin({ username: form.identifier, password: form.password });
+        : tab === 'patient'
+          ? await patientLogin({ username: form.identifier, password: form.password })
+          : await credentialLogin({ username: form.identifier, password: form.password });
       onLogin(data);
     } catch (err) {
       setError(err.message || 'Login failed');
@@ -66,7 +68,7 @@ export function LoginScreen({ onLogin, onShowSetup }) {
         <Card style={{ padding: '32px', border: `1px solid ${C.border}`, boxShadow: '0 8px 30px rgba(0,0,0,0.06)' }}>
           {/* Tabs */}
           <div style={{ display: 'flex', background: C.bg, borderRadius: 8, padding: 4, marginBottom: 28, gap: 4 }}>
-            {[['credential', 'Staff Login'], ['admin', 'Admin Login']].map(([t, label]) => (
+            {[['credential', 'Staff'], ['admin', 'Admin'], ['patient', 'Patient']].map(([t, label]) => (
               <button 
                 key={t} 
                 onClick={() => { setTab(t); setError(''); setForm({ identifier: '', password: '' }); }}
@@ -91,6 +93,11 @@ export function LoginScreen({ onLogin, onShowSetup }) {
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {tab === 'patient' && (
+              <p style={{ fontSize: 12, color: C.muted, margin: '-8px 0 0', lineHeight: 1.5 }}>
+                Use the username and password emailed to you by your hospital.
+              </p>
+            )}
             <Input
               label={tab === 'admin' ? 'Admin Email' : 'Username'}
               type={tab === 'admin' ? 'email' : 'text'}

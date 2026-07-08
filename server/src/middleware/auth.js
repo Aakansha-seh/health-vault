@@ -1,4 +1,4 @@
-// Auth middleware — two token types: admin and credential
+// Auth middleware — three token types: admin, credential, and patient
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma.js';
 
@@ -63,6 +63,43 @@ export async function authenticate(req, res, next) {
     }
     return res.status(401).json({ error: 'Invalid token type' });
   } catch (err) { return jwtError(err, res); }
+}
+
+// Patient portal token. req.actor.patientId is the ONLY record the caller may
+// touch — every portal query must be scoped to it.
+export async function authenticatePatient(req, res, next) {
+  const token = extractToken(req);
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+  try {
+    const payload = verifyJWT(token);
+    if (payload.type !== 'patient') return res.status(403).json({ error: 'Patient login required' });
+    const account = await prisma.patientAccount.findUnique({
+      where: { id: payload.patientAccountId },
+      include: { patient: { select: { id: true, name: true } } },
+    });
+    if (!account || !account.isActive || !account.passwordHash) {
+      return res.status(401).json({ error: 'Portal access has been revoked or does not exist' });
+    }
+    req.actor = {
+      type: 'patient',
+      id: account.id,                       // PatientAccount id
+      patientId: account.patientId,
+      hospitalId: account.hospitalId,
+      role: 'PATIENT',
+      name: account.patient.name,
+      label: account.patient.name,
+      mustChangePassword: account.mustChangePassword,
+    };
+    next();
+  } catch (err) { return jwtError(err, res); }
+}
+
+// Blocks portal data routes until the temporary password has been replaced.
+export function requirePasswordChanged(req, res, next) {
+  if (req.actor?.mustChangePassword) {
+    return res.status(403).json({ error: 'Please set a new password first', code: 'PASSWORD_CHANGE_REQUIRED' });
+  }
+  next();
 }
 
 export function requireRole(...roles) {

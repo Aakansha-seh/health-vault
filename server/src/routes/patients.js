@@ -1,11 +1,65 @@
 // Patients routes
 import { Router } from 'express';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import prisma from '../lib/prisma.js';
 import { authenticate, authenticateCredential } from '../middleware/auth.js';
 import { writeAudit } from '../lib/audit.js';
+import { sendPatientInvite, emailConfigured } from '../lib/email.js';
 
 const router = Router();
+
+// ─── Patient portal accounts ─────────────────────────────────────────────────
+
+// What staff UIs need to know about a patient's portal account. NEVER include
+// passwordHash here.
+const accountSelect = {
+  id: true, username: true, isActive: true, mustChangePassword: true,
+  invitedAt: true, lastLoginAt: true,
+};
+
+// Patient-uploaded documents shown on the staff side.
+const patientFilesInclude = {
+  where:   { source: 'PATIENT' },
+  orderBy: { createdAt: 'desc' },
+  select:  { id: true, fileName: true, type: true, reportType: true, createdAt: true },
+};
+
+const usernameSlug = (name) =>
+  (String(name).toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '') || 'patient').slice(0, 20);
+
+// Reserve a portal username at registration time. The password is NOT set here —
+// it is generated when staff presses "Invite" and emailed to the patient.
+// Never throws: a portal-account hiccup must not break patient registration.
+async function ensurePatientAccount(db, patient) {
+  try {
+    const existing = await db.patientAccount.findUnique({ where: { patientId: patient.id } });
+    if (existing) return existing;
+    const slug = usernameSlug(patient.name);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const username = `${slug}.${crypto.randomInt(1000, 10000)}`;
+      try {
+        return await db.patientAccount.create({
+          data: { patientId: patient.id, hospitalId: patient.hospitalId, username },
+        });
+      } catch (err) {
+        if (err?.code !== 'P2002') throw err;   // retry only on username collision
+      }
+    }
+    console.error(`[PatientAccount] Could not find a free username for patient ${patient.id}`);
+    return null;
+  } catch (err) {
+    console.error('[PatientAccount] auto-create failed:', err.message);
+    return null;
+  }
+}
+
+// Unambiguous temporary password (no 0/O, 1/l/I).
+function generateTempPassword(len = 12) {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  return Array.from(crypto.randomBytes(len), (b) => chars[b % chars.length]).join('');
+}
 
 const PatientSchema = z.object({
   name:           z.string().min(2),
@@ -100,6 +154,8 @@ router.get('/', authenticate, async (req, res, next) => {
             take: 5,
             include: { doctorProfile: { select: { id: true, name: true } } },
           },
+          account:     { select: accountSelect },
+          attachments: patientFilesInclude,
         },
         orderBy: { createdAt: 'desc' },
         take, skip,
@@ -130,6 +186,8 @@ router.post('/', authenticateCredential, async (req, res, next) => {
     const patient = await prisma.patient.create({
       data: { ...clean(data), hospitalId: req.actor.hospitalId, registeredBy: req.actor.id },
     });
+    const account = await ensurePatientAccount(prisma, patient);
+    if (account) patient.account = { ...account, passwordHash: undefined };
     await writeAudit({
       actor: req.actor, action: 'PATIENT_CREATED',
       target: { type: 'Patient', id: patient.id, label: patient.name },
@@ -247,6 +305,10 @@ router.post('/intake', authenticateCredential, async (req, res, next) => {
       return { patient, visit, appointment };
     });
 
+    // Auto-reserve a portal username (outside the transaction — non-critical).
+    const account = await ensurePatientAccount(prisma, result.patient);
+    if (account) result.patient.account = { ...account, passwordHash: undefined };
+
     await writeAudit({
       actor: req.actor, action: 'PATIENT_CREATED',
       target: { type: 'Patient', id: result.patient.id, label: result.patient.name },
@@ -285,6 +347,8 @@ router.get('/:id', authenticate, async (req, res, next) => {
           orderBy: { date: 'desc' },
           include: { doctorProfile: { select: { id: true, name: true } } },
         },
+        account:     { select: accountSelect },
+        attachments: patientFilesInclude,
       },
     });
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
@@ -319,6 +383,113 @@ router.patch('/:id', authenticateCredential, async (req, res, next) => {
       ipAddress: req.ip,
     });
     res.json(updated);
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
+    next(err);
+  }
+});
+
+// ─── Patient portal: invite & access control ─────────────────────────────────
+
+// POST /api/patients/:id/invite — generate a temporary password, email the
+// portal credentials to the patient, and (re)activate their account.
+// Any staff member (admin, receptionist, doctor) of the hospital may invite.
+// Optional body { email } sets/updates the patient's email in the same step.
+const InviteSchema = z.object({
+  email: z.string().email().optional().or(z.literal('')),
+});
+
+router.post('/:id/invite', authenticate, async (req, res, next) => {
+  try {
+    if (!emailConfigured()) {
+      return res.status(503).json({ error: 'Email is not configured on the server. Set GMAIL_USER and GMAIL_APP_PASSWORD in server/.env.' });
+    }
+    const { email: newEmail } = InviteSchema.parse(req.body ?? {});
+
+    let patient = await prisma.patient.findFirst({
+      where:   { id: req.params.id, hospitalId: req.actor.hospitalId },
+      include: { hospital: { select: { name: true } } },
+    });
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+    if (newEmail && newEmail !== patient.email) {
+      patient = await prisma.patient.update({
+        where: { id: patient.id }, data: { email: newEmail },
+        include: { hospital: { select: { name: true } } },
+      });
+    }
+    if (!patient.email) {
+      return res.status(400).json({ error: 'This patient has no email address on file. Add one to send the invite.' });
+    }
+
+    const account = await ensurePatientAccount(prisma, patient);
+    if (!account) return res.status(500).json({ error: 'Could not create the portal account. Please try again.' });
+
+    // Rotate the temporary password on every (re)invite; force a change on login.
+    const tempPassword = generateTempPassword();
+    await prisma.patientAccount.update({
+      where: { id: account.id },
+      data: {
+        passwordHash: await bcrypt.hash(tempPassword, 12),
+        mustChangePassword: true,
+        isActive: true,
+        invitedAt: new Date(),
+      },
+    });
+
+    try {
+      await sendPatientInvite({
+        to:           patient.email,
+        patientName:  patient.name,
+        hospitalName: patient.hospital.name,
+        username:     account.username,
+        tempPassword,
+      });
+    } catch (mailErr) {
+      console.error('[Invite] email send failed:', mailErr.message);
+      return res.status(502).json({ error: 'The invite email could not be sent. Check the Gmail settings and press Invite again.' });
+    }
+
+    await writeAudit({
+      actor: req.actor, action: 'PATIENT_INVITED',
+      target: { type: 'Patient', id: patient.id, label: patient.name },
+      details: `Portal credentials emailed to ${patient.email}`,
+      ipAddress: req.ip,
+    });
+
+    const fresh = await prisma.patientAccount.findUnique({ where: { id: account.id }, select: accountSelect });
+    res.json({ message: `Invite sent to ${patient.email}`, account: fresh });
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
+    next(err);
+  }
+});
+
+// POST /api/patients/:id/portal-access — { active: boolean } revoke/restore
+// the patient's portal login. Staff only.
+const PortalAccessSchema = z.object({ active: z.boolean() });
+
+router.post('/:id/portal-access', authenticate, async (req, res, next) => {
+  try {
+    const { active } = PortalAccessSchema.parse(req.body);
+    const patient = await prisma.patient.findFirst({
+      where: { id: req.params.id, hospitalId: req.actor.hospitalId },
+      select: { id: true, name: true },
+    });
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+    const account = await prisma.patientAccount.findUnique({ where: { patientId: patient.id } });
+    if (!account) return res.status(404).json({ error: 'This patient has no portal account yet' });
+
+    const updated = await prisma.patientAccount.update({
+      where: { id: account.id }, data: { isActive: active }, select: accountSelect,
+    });
+    await writeAudit({
+      actor: req.actor, action: active ? 'PATIENT_ACCESS_REACTIVATED' : 'PATIENT_ACCESS_REVOKED',
+      target: { type: 'Patient', id: patient.id, label: patient.name },
+      ipAddress: req.ip,
+    });
+    res.json({ account: updated });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
     next(err);
