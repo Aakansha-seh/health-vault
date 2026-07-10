@@ -87,6 +87,7 @@ router.post('/', authenticateCredential, async (req, res, next) => {
       type:       saved.type,
       reportType: reportType || null,
       fileId:     attachment.id,
+      url:        `/api/uploads/file/${attachment.id}`,
     });
   } catch (err) {
     if (err instanceof z.ZodError) {
