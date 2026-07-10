@@ -4,7 +4,7 @@ import { C, shadows, radii } from '../../constants/theme';
  * Card — standard white surface. Crisp hairline border + low-spread shadow for a
  * precise (not bubbly) feel. Accepts an optional `style` prop for overrides.
  */
-export function Card({ children, style, interactive = false }) {
+export function Card({ children, style, interactive = false, ...props }) {
   return (
     <div
       className={`${interactive ? "hv-card-hover" : ""} hv-glass-panel`}
@@ -13,6 +13,7 @@ export function Card({ children, style, interactive = false }) {
         boxShadow:    shadows.xs,
         ...style,
       }}
+      {...props}
     >
       {children}
     </div>
